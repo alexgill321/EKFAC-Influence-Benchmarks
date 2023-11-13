@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 import json
 import random
+from torchinfo import summary
 
 # Set the random seed for reproducibility
 seed = 42
@@ -13,31 +14,24 @@ torch.manual_seed(seed)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-# Define the transformation to flatten the images
-transform = transforms.Compose([transforms.ToTensor(), transforms.Lambda(lambda x: x.view(-1))])
+def load_data(store_mnist='../data'):
+    # Define the transformation to flatten the images
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Lambda(lambda x: x.view(-1))])
 
-# Download MNIST dataset and create DataLoader
-train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
-test_dataset = datasets.MNIST(root='../data', train=False, transform=transform, download=True)
+    # Download MNIST dataset and create DataLoader
+    train_dataset = datasets.MNIST(root=store_mnist, train=True, transform=transform, download=True)
+    test_dataset = datasets.MNIST(root=store_mnist, train=False, transform=transform, download=True)
 
-# Split the training dataset into training and validation sets
-train_size = int(0.8 * len(train_dataset))
-val_size = len(train_dataset) - train_size
+    # Split the training dataset into training and validation sets
+    train_size = int(0.8 * len(train_dataset))
+    val_size = len(train_dataset) - train_size
 
-train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
+    train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 
-# # Convert training set to a list of dictionaries
-# train_data_list = {'train' : [{"img": list(path), "label": int(label)} for path, label in train_dataset], 'validation' : [{"img": list(path), "label": int(label)} for path, label in val_dataset]}
-
-# # Save the training set as a JSON file
-# with open('../data/train_dataset.json', 'w') as f:
-#     json.dump(train_data_list, f)
-# print("Training set saved as 'train_dataset.json'.")
-
-train_loader = DataLoader(dataset=train_dataset, batch_size=64, shuffle=True)
-val_loader = DataLoader(dataset=val_dataset, batch_size=64, shuffle=False)
-test_loader = DataLoader(dataset=test_dataset, batch_size=64, shuffle=False)
-print('data loaded')
+    train_loader = DataLoader(dataset=train_dataset, batch_size=64, shuffle=True)
+    val_loader = DataLoader(dataset=val_dataset, batch_size=64, shuffle=False)
+    test_loader = DataLoader(dataset=test_dataset, batch_size=64, shuffle=False)
+    return train_loader, val_loader, test_loader
 
 # Define a neural network model with an output layer of 10 nodes
 class SimpleNN(nn.Module):
@@ -160,9 +154,27 @@ def test(model, test_loader, criterion, mse_criterion):
     print(f"Test Loss: {avg_loss:.4f}, Test Accuracy: {accuracy * 100:.2f}%")
     return avg_loss, accuracy
 
-# Train the model
-train(model, train_loader, val_loader, criterion, mse_criterion, optimizer, epochs=5)
+def get_model():
+    # Instantiate the model, loss function, and optimizer
+    model = SimpleNN()
+    criterion = nn.CrossEntropyLoss()
+    mse_criterion = nn.MSELoss()
+    optimizer = optim.SGD(model.parameters(), lr=0.01)
+    return model, criterion, mse_criterion, optimizer
 
-# Test the model
-test_loss, test_accuracy = test(model, test_loader, criterion, mse_criterion)
-print(f"Final Test Loss: {test_loss:.4f}, Final Test Accuracy: {test_accuracy * 100:.2f}%")
+
+# Function to load the model from a saved state
+def load_model(model, filepath='../models/transformer_trained_model.pth'):
+    model.load_state_dict(torch.load(filepath))
+    model.eval()
+    return model
+
+if __name__ == '__main__':
+    train_loader, val_loader, test_loader = load_data()
+    summary(model, (64, 784))
+    # Train the model
+    train(model, train_loader, val_loader, criterion, mse_criterion, optimizer, epochs=5)
+
+    # Test the model
+    test_loss, test_accuracy = test(model, test_loader, criterion, mse_criterion)
+    print(f"Final Test Loss: {test_loss:.4f}, Final Test Accuracy: {test_accuracy * 100:.2f}%")
