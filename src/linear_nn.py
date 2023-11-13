@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 import json
 import random
-from torchinfo import summary
+
 
 # Set the random seed for reproducibility
 seed = 42
