@@ -54,11 +54,11 @@ class TransformerModel(nn.Module):
 # Instantiate the model, loss function, and optimizer
 model = TransformerModel()
 criterion = nn.CrossEntropyLoss()
-mse_criterion = nn.MSELoss()
+#mse_criterion = nn.MSELoss()
 optimizer = optim.SGD(model.parameters(), lr=0.01)
 
 # Training loop
-def train(model, train_loader, val_loader, criterion, mse_criterion, optimizer, epochs=5):
+def train(model, train_loader, val_loader, criterion, optimizer, epochs=5):
     for epoch in range(epochs):
         model.train()
         total_loss = 0.0
@@ -72,10 +72,10 @@ def train(model, train_loader, val_loader, criterion, mse_criterion, optimizer, 
             loss_ce = criterion(outputs, labels)
             
             # Compute mean squared error
-            loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
+            #loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
             
             # Combine the two losses
-            loss = loss_ce + loss_mse
+            loss = loss_ce #+ loss_mse
             
             loss.backward()
             optimizer.step()
@@ -91,14 +91,15 @@ def train(model, train_loader, val_loader, criterion, mse_criterion, optimizer, 
         accuracy = correct / total
 
         # Print validation loss during training
-        val_loss, val_acc = validate(model, val_loader, criterion, mse_criterion)
+        val_loss, val_acc = validate(model, val_loader, criterion)#, mse_criterion)
         print(f"Epoch {epoch + 1}/{epochs}, Loss: {avg_loss:.4f}, Accuracy: {accuracy * 100:.2f}%, Val Loss: {val_loss:.4f}, Val Accuracy: {val_acc * 100:.2f}%")
+        torch.save(model.state_dict(), f'../models/checkpoints/checkpoint_{epoch+1}_transformer_trained_model.pth')
     # Save the trained model
     torch.save(model.state_dict(), '../models/transformer_trained_model.pth')
     print("Trained model saved.")
 
 # Validation loop
-def validate(model, val_loader, criterion, mse_criterion):
+def validate(model, val_loader, criterion):#, mse_criterion):
     model.eval()
     correct = 0
     total = 0
@@ -111,10 +112,10 @@ def validate(model, val_loader, criterion, mse_criterion):
             loss_ce = criterion(outputs, labels)
             
             # Compute mean squared error
-            loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
+            #loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
             
             # Combine the two losses
-            loss = loss_ce + loss_mse
+            loss = loss_ce #+ loss_mse
             
             total_loss += loss.item()
             
@@ -129,7 +130,7 @@ def validate(model, val_loader, criterion, mse_criterion):
     return avg_loss, accuracy
 
 # Testing loop
-def test(model, test_loader, criterion, mse_criterion):
+def test(model, test_loader, criterion):#, mse_criterion):
     model.eval()
     correct = 0
     total = 0
@@ -142,10 +143,10 @@ def test(model, test_loader, criterion, mse_criterion):
             loss_ce = criterion(outputs, labels)
             
             # Compute mean squared error
-            loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
+            #loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
             
             # Combine the two losses
-            loss = loss_ce + loss_mse
+            loss = loss_ce #+ loss_mse
             
             total_loss += loss.item()
             
@@ -163,9 +164,9 @@ def test(model, test_loader, criterion, mse_criterion):
 def get_model():
     model = TransformerModel()
     criterion = nn.CrossEntropyLoss()
-    mse_criterion = nn.MSELoss()
+    #mse_criterion = nn.MSELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.01)
-    return model, criterion, mse_criterion, optimizer
+    return model, criterion, optimizer
 
 
 # Function to load the model from a saved state
@@ -178,8 +179,8 @@ if __name__ == '__main__':
     train_loader, val_loader, test_loader = load_data()
     summary(model, (64, 784))
     # Train the model
-    train(model, train_loader, val_loader, criterion, mse_criterion, optimizer, epochs=5)
+    train(model, train_loader, val_loader, criterion, optimizer, epochs=10)
 
     # Test the model
-    test_loss, test_accuracy = test(model, test_loader, criterion, mse_criterion)
+    test_loss, test_accuracy = test(model, test_loader, criterion)
     print(f"Final Test Loss: {test_loss:.4f}, Final Test Accuracy: {test_accuracy * 100:.2f}%")
