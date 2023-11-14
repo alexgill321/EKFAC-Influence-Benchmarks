@@ -206,6 +206,17 @@ def load_model(model, filepath='../models/transformer_trained_model.pth'):
     model.eval()
     return model
 
+def load_checkpoint(model, optimizer, filepath):
+    checkpoint = torch.load(filepath)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    epoch = checkpoint['epoch']
+    loss = checkpoint['loss']
+    return model, optimizer
+
+
+model.eval()
+
 if __name__ == '__main__':
     train_loader, val_loader, test_loader = load_data()
     summary(model, (64, 784))
