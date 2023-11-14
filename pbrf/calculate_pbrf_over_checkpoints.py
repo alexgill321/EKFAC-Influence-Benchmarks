@@ -1,6 +1,9 @@
 import torch
 import random
 
+import sys
+sys.path.append('/Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks/')
+
 seed = 42
 random.seed(seed)
 torch.manual_seed(seed)
@@ -8,26 +11,49 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 from src.linear_nn import load_data, get_model, load_model, test
+
 from pbrf.pbrf_helpers import calculate_bergman_divergance, pbrf_from_bergman
 
 train_loader, val_loader, test_loader = load_data()
 print("got the data.")
-model, criterion, mse_criterion, optimizer = get_model()
+model, criterion, optimizer = get_model()
 
-untrained_model = load_data(model, filepath = 'models/checkpoints/checkpoint_1_linear_trained_model.pth')
+untrained_model = load_model(model, filepath = 'models/checkpoints/checkpoint_1_linear_trained_model.pth')
 trained_model = load_model(model, filepath = 'models/linear_trained_model.pth')
 print("got the model.")
 
-untrained_model_params = untrained_model.fc1.weight.grad
-untrained_model_params = trained_model.fc1.weight.grad
+def compare_state_dicts(state_dict1, state_dict2):
+    for (key1, val1), (key2, val2) in zip(state_dict1.items(), state_dict2.items()):
+        if not torch.equal(val1, val2):
+            print(f"Difference found in key: {key1}")
+            return False
+    return True
 
-training_preds_on_untrained_model, _ = test(untrained_model, '' , criterion, mse_criterion, get_preds_only = True, train_loader = train_loader)
-training_preds_on_trained_model, output_grads = test(trained_model, '' , criterion, mse_criterion, get_preds_only = True, train_loader = train_loader)
+state_dict1 = untrained_model.state_dict()
+state_dict2 = trained_model.state_dict()
 
-print("got the preds")
+are_identical = compare_state_dicts(state_dict1, state_dict2)
+print("Are models identical?", are_identical)
+#
+# exit()
+# print(untrained_model.fc1.weight)
+# print("***")
+# print(trained_model.fc1.weight)
+# print(torch.eq(untrained_model.fc1.weight, trained_model.fc1.weight))
+# exit()
+
+untrained_model_params = untrained_model.fc1.weight
+trained_model_params = trained_model.fc1.weight
+
+trained_model_params = trained_model_params*0.1
+
+
+training_preds_on_untrained_model, _ = test(untrained_model, '' , criterion, get_preds_only = True, train_loader = train_loader)
+training_preds_on_trained_model, output_grads = test(trained_model, '' , criterion, get_preds_only = True, train_loader = train_loader)
+
 one_example_bergman_cov = calculate_bergman_divergance(train_loader, training_preds_on_untrained_model,
                                                        training_preds_on_trained_model, criterion, output_grads)
-pbrf_from_bergman(one_example_bergman_cov)
+pbrf_from_bergman(one_example_bergman_cov, untrained_model_params, trained_model_params)
 
 
 
