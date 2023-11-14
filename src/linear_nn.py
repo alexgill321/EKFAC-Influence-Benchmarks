@@ -202,9 +202,6 @@ def load_model(model, filepath='../models/transformer_trained_model.pth'):
     return model
 
 
-
-model.eval()
-
 if __name__ == '__main__':
     train_loader, val_loader, test_loader = load_data()
     summary(model, (64, 784))
