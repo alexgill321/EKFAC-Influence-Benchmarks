@@ -126,7 +126,7 @@ def validate(model, val_loader, criterion):
     return avg_loss, accuracy
 
 # Testing loop
-def test(model, test_loader, criterion, mse_criterion, get_preds_only = False, train_loader = None):
+def test(model, test_loader, criterion, get_preds_only = False, train_loader = None):
 
     model.eval()
     correct = 0
@@ -143,10 +143,10 @@ def test(model, test_loader, criterion, mse_criterion, get_preds_only = False, t
                 loss_ce = criterion(outputs, labels)
 
                 # Compute mean squared error
-                loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
+                # loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
 
                 # Combine the two losses
-                loss = loss_ce + loss_mse
+                loss = loss_ce #+ loss_mse
 
                 total_loss += loss.item()
 
@@ -173,14 +173,14 @@ def test(model, test_loader, criterion, mse_criterion, get_preds_only = False, t
             loss_ce = criterion(outputs, labels)
 
             # Compute mean squared error
-            loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
+            # loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
 
             # Combine the two losses
-            loss = loss_ce + loss_mse
+            loss = loss_ce #+ loss_mse
 
             loss.backward()
+
             output_grads.append(outputs.grad)
-            outputs.zero_grad()
 
         return all_preds_array, output_grads
 
