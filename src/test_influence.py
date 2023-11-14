@@ -273,6 +273,7 @@ class EKFACInfluence(DataInfluence):
                 else:
                     grads = layer.weight.grad.view(-1)
                 for grad in grads:
+                    print(grad.shape)
                     influence_src_grads[layer].append(grad)
         
         for layer in layer_modules:
