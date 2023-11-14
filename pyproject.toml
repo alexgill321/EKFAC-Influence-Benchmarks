@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "ekfac-influence-benchmarks"
+version = "0.1.0"
+description = ""
+authors = ["Terry071896 <tfcox1703@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+# torch = { url = "https://download.pytorch.org/whl/torch_stable.html/cpu/torch-1.13.1%2Bcpu-cp36-cp36m-win_amd64.whl" }
+numpy = "^1.23.2"
+torch = { version = "1.13.1", source="torch"}
+# torchvision = { version = "0.15.2", source="torch"}
+
+
+[[tool.poetry.source]]
+name = "torch"
+url = "https://download.pytorch.org/whl/cu116/"
+priority = "explicit"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

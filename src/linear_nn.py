@@ -85,11 +85,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10):
         avg_loss = total_loss / len(train_loader)
         accuracy = correct / total
 
-        # Print validation loss during training
-        val_loss, val_acc = validate(model, val_loader, criterion)
-        print(f"Epoch {epoch + 1}/{epochs}, Loss: {avg_loss:.4f}, Accuracy: {accuracy * 100:.2f}%, Val Loss: {val_loss:.4f}, Val Accuracy: {val_acc * 100:.2f}%")
-        
-        if epoch % 5 == 0:
+        if epoch == 0:
             # Save checkpoint
             checkpoint_path = os.path.join(checkpoint_dir, f'checkpoint_{epoch + 1}_linear_trained_model.pth')
             torch.save({
@@ -99,6 +95,12 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10):
                 'loss': avg_loss,
             }, checkpoint_path)
             print(f"Checkpoint saved at {checkpoint_path}")
+
+        # Print validation loss during training
+        val_loss, val_acc = validate(model, val_loader, criterion)
+        print(f"Epoch {epoch + 1}/{epochs}, Loss: {avg_loss:.4f}, Accuracy: {accuracy * 100:.2f}%, Val Loss: {val_loss:.4f}, Val Accuracy: {val_acc * 100:.2f}%")
+        
+        
 
     # Save the trained model
     torch.save(model.state_dict(), '../models/linear_trained_model.pth')
@@ -212,7 +214,7 @@ def load_checkpoint(model, optimizer, filepath):
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     epoch = checkpoint['epoch']
     loss = checkpoint['loss']
-    return model, optimizer
+    return model, optimizer, epoch, loss
 
 
 model.eval()
