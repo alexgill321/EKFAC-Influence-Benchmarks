@@ -93,7 +93,8 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=5):
         # Print validation loss during training
         val_loss, val_acc = validate(model, val_loader, criterion)#, mse_criterion)
         print(f"Epoch {epoch + 1}/{epochs}, Loss: {avg_loss:.4f}, Accuracy: {accuracy * 100:.2f}%, Val Loss: {val_loss:.4f}, Val Accuracy: {val_acc * 100:.2f}%")
-        torch.save(model.state_dict(), f'../models/checkpoints/checkpoint_{epoch+1}_transformer_trained_model.pth')
+        if epoch % 5 == 0:
+            torch.save(model.state_dict(), f'../models/checkpoints/checkpoint_{epoch+1}_transformer_trained_model.pth')
     # Save the trained model
     torch.save(model.state_dict(), '../models/transformer_trained_model.pth')
     print("Trained model saved.")
