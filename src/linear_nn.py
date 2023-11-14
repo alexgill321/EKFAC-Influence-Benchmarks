@@ -6,7 +6,7 @@ from torchvision import datasets, transforms
 import json
 import random
 from torchinfo import summary
-
+import os
 
 # Set the random seed for reproducibility
 seed = 42
@@ -52,8 +52,11 @@ criterion = nn.CrossEntropyLoss()
 #mse_criterion = nn.MSELoss()
 optimizer = optim.SGD(model.parameters(), lr=0.01)
 
-# Training loop
+# Training loop with checkpoints
 def train(model, train_loader, val_loader, criterion, optimizer, epochs=10):
+    checkpoint_dir = '../models/checkpoints'
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
     for epoch in range(epochs):
         model.train()
         total_loss = 0.0
@@ -66,11 +69,8 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10):
             # Compute cross-entropy loss
             loss_ce = criterion(outputs, labels)
             
-            # Compute mean squared error
-            #loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
-            
             # Combine the two losses
-            loss = loss_ce #+ loss_mse
+            loss = loss_ce
             
             loss.backward()
             optimizer.step()
@@ -86,10 +86,20 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10):
         accuracy = correct / total
 
         # Print validation loss during training
-        val_loss, val_acc = validate(model, val_loader, criterion)#, mse_criterion)
+        val_loss, val_acc = validate(model, val_loader, criterion)
         print(f"Epoch {epoch + 1}/{epochs}, Loss: {avg_loss:.4f}, Accuracy: {accuracy * 100:.2f}%, Val Loss: {val_loss:.4f}, Val Accuracy: {val_acc * 100:.2f}%")
+        
         if epoch % 5 == 0:
-            torch.save(model.state_dict(), f'../models/checkpoints/checkpoint_{epoch+1}_linear_trained_model.pth')
+            # Save checkpoint
+            checkpoint_path = os.path.join(checkpoint_dir, f'checkpoint_{epoch + 1}_linear_trained_model.pth')
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': avg_loss,
+            }, checkpoint_path)
+            print(f"Checkpoint saved at {checkpoint_path}")
+
     # Save the trained model
     torch.save(model.state_dict(), '../models/linear_trained_model.pth')
     print("Trained model saved.")
@@ -107,11 +117,8 @@ def validate(model, val_loader, criterion):
             # Compute cross-entropy loss
             loss_ce = criterion(outputs, labels)
             
-            # Compute mean squared error
-            #loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
-            
             # Combine the two losses
-            loss = loss_ce #+ loss_mse
+            loss = loss_ce
             
             total_loss += loss.item()
             
@@ -126,7 +133,7 @@ def validate(model, val_loader, criterion):
     return avg_loss, accuracy
 
 # Testing loop
-def test(model, test_loader, criterion, mse_criterion, get_preds_only = False, train_loader = None):
+def test(model, test_loader, criterion, get_preds_only = False, train_loader = None):
 
     model.eval()
     correct = 0
@@ -142,11 +149,8 @@ def test(model, test_loader, criterion, mse_criterion, get_preds_only = False, t
                 # Compute cross-entropy loss
                 loss_ce = criterion(outputs, labels)
 
-                # Compute mean squared error
-                loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
-
                 # Combine the two losses
-                loss = loss_ce + loss_mse
+                loss = loss_ce
 
                 total_loss += loss.item()
 
@@ -172,11 +176,8 @@ def test(model, test_loader, criterion, mse_criterion, get_preds_only = False, t
             # Compute cross-entropy loss
             loss_ce = criterion(outputs, labels)
 
-            # Compute mean squared error
-            loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
-
             # Combine the two losses
-            loss = loss_ce + loss_mse
+            loss = loss_ce
 
             loss.backward()
             output_grads.append(outputs.grad)
