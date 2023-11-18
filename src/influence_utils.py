@@ -107,7 +107,7 @@ class EKFACInfluence(DataInfluence):
             self.influence_src_dataset, batch_size=batch_size, shuffle=False
         )
         self.cov_src_dataloader = DataLoader(
-            self.influence_src_dataset, batch_size=cov_batch_size, shuffle=False
+            self.influence_src_dataset, batch_size=cov_batch_size, shuffle=True
         )
     
     def influence(
