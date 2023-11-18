@@ -15,7 +15,7 @@ transform = transforms.Compose([transforms.ToTensor(), transforms.Lambda(lambda 
 
 # Download MNIST dataset and create DataLoader
 train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
-
+copy_train_ds = train_dataset
 # Split the training dataset into training and validation sets
 train_size = int(0.8 * len(train_dataset))
 val_size = len(train_dataset) - train_size
@@ -23,6 +23,7 @@ val_size = len(train_dataset) - train_size
 train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 
 train_loader = DataLoader(dataset=train_dataset, batch_size=64, shuffle=True)
+
 
 # Function to add Gaussian noise to training examples
 def add_gaussian_noise(data, mean=0, std=0.1):

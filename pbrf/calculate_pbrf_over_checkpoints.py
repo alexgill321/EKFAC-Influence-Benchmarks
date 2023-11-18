@@ -10,7 +10,7 @@ torch.manual_seed(seed)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-from src.linear_nn import load_data, get_model, load_model, test, load_checkpoint
+from src.linear_nn import load_data, get_model, load_model, test, load_model
 
 from pbrf.pbrf_helpers import calculate_bergman_divergance, pbrf_from_bergman
 
@@ -20,7 +20,7 @@ model, criterion, optimizer = get_model()
 model1, criterion1, optimizer1 = get_model()
 
 
-untrained_model, _, _, _= load_checkpoint(model, optimizer, filepath = 'models/checkpoints/checkpoint_1_linear_trained_model.pth')
+untrained_model = load_model(model, filepath = 'models/checkpoints/checkpoint_1_linear_trained_model.pth')
 trained_model = load_model(model1, filepath = 'models/linear_trained_model.pth')
 
 print("got the model.")
@@ -63,6 +63,7 @@ training_preds_on_trained_model, output_grads = test(trained_model, '' , criteri
 full_dataset_bergman_cov = calculate_bergman_divergance(train_loader, training_preds_on_untrained_model,
                                                        training_preds_on_trained_model, criterion, output_grads)
 full_dataset_pbrf = pbrf_from_bergman(full_dataset_bergman_cov, untrained_model_params, trained_model_params)
-
-print(full_dataset_pbrf[:10])
+a = torch.stack(full_dataset_pbrf)
+print("saving model now")
+torch.save(a, 'pbrf_tensor.pt')
 
