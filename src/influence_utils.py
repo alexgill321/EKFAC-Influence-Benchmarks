@@ -215,11 +215,11 @@ class EKFACInfluence(DataInfluence):
                 ekfac.step()
                 self.module.zero_grad()
                 ekfac.zero_grad()
-        
-        G_list = {}
+                G_list = {}
         # Compute average A and S
         for group in ekfac.param_groups:
             G_list[group['mod']] = {}
+            ekfac.calc_act = True
             with autocast():
                 A = torch.stack(group['A']).mean(dim=0)
                 S = torch.stack(group['S']).mean(dim=0)
@@ -231,6 +231,7 @@ class EKFACInfluence(DataInfluence):
                 la, Qa = torch.linalg.eigh(A)
                 ls, Qs = torch.linalg.eigh(S)
                 eigenval_diags = torch.outer(la, ls).flatten(start_dim=0)
+                
 
             G_list[group['mod']]['Qa'] = Qa
             G_list[group['mod']]['Qs'] = Qs
