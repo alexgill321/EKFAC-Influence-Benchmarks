@@ -17,7 +17,7 @@ torch.backends.cudnn.benchmark = False
 
 def load_data(store_mnist='../data'):
     # Define the transformation to flatten the images
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Lambda(lambda x: x.view(-1))])
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,)), transforms.Lambda(lambda x: x.view(-1))])
 
     # Download MNIST dataset and create DataLoader
     train_dataset = datasets.MNIST(root=store_mnist, train=True, transform=transform, download=True)
@@ -29,17 +29,17 @@ def load_data(store_mnist='../data'):
 
     train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 
-    train_loader = DataLoader(dataset=train_dataset, batch_size=64, shuffle=True)
-    val_loader = DataLoader(dataset=val_dataset, batch_size=64, shuffle=False)
-    test_loader = DataLoader(dataset=test_dataset, batch_size=64, shuffle=False)
+    train_loader = DataLoader(dataset=train_dataset, batch_size=128, shuffle=True)
+    val_loader = DataLoader(dataset=val_dataset, batch_size=128, shuffle=False)
+    test_loader = DataLoader(dataset=test_dataset, batch_size=128, shuffle=False)
     return train_loader, val_loader, test_loader
 
 # Define a neural network model with an output layer of 10 nodes
 class SimpleNN(nn.Module):
     def __init__(self):
         super(SimpleNN, self).__init__()
-        self.fc1 = nn.Linear(28 * 28, 82)  # Flattened input size is 28*28
-        self.fc2 = nn.Linear(82, 10)  # Output layer with 10 nodes
+        self.fc1 = nn.Linear(28 * 28, 256)  # Flattened input size is 28*28
+        self.fc2 = nn.Linear(256, 10)  # Output layer with 10 nodes
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
@@ -56,6 +56,7 @@ optimizer = optim.SGD(model.parameters(), lr=0.01)
 def train(model, train_loader, val_loader, criterion, optimizer, epochs=10):
     checkpoint_dir = '../models/checkpoints'
     os.makedirs(checkpoint_dir, exist_ok=True)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     for epoch in range(epochs):
         model.train()
@@ -64,6 +65,8 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10):
         total = 0
         for inputs, labels in train_loader:
             optimizer.zero_grad()
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             outputs = model(inputs)
             
             # Compute cross-entropy loss
@@ -101,12 +104,15 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10):
 
 # Validation loop
 def validate(model, val_loader, criterion):
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.eval()
     correct = 0
     total = 0
     total_loss = 0.0
     with torch.no_grad():
         for inputs, labels in val_loader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             outputs = model(inputs)
             
             # Compute cross-entropy loss
@@ -134,11 +140,13 @@ def test(model, test_loader, criterion, get_preds_only = False, train_loader = N
     correct = 0
     total = 0
     total_loss = 0.0
-
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     if not get_preds_only:
         with torch.no_grad():
             for inputs, labels in test_loader:
+                inputs = inputs.to(device)
+                labels = labels.to(device)
                 outputs = model(inputs)
 
                 # Compute cross-entropy loss
@@ -166,7 +174,8 @@ def test(model, test_loader, criterion, get_preds_only = False, train_loader = N
         all_preds_array = []
         output_grads = []
         for inputs, labels in train_loader:
-
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             outputs = model(inputs)
             all_preds_array.append(outputs)
             outputs.retain_grad()
@@ -204,7 +213,9 @@ def load_model(model, filepath='../models/transformer_trained_model.pth'):
 
 if __name__ == '__main__':
     train_loader, val_loader, test_loader = load_data()
-    summary(model, (64, 784))
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    summary(model, (128, 784))
     # Train the model
     train(model, train_loader, val_loader, criterion, optimizer, epochs=10)
 

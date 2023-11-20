@@ -17,7 +17,7 @@ outputs = model.generate(**inputs)
 for batch in input_dataloader:
     batch.pop('text', None)
     batch.pop('meta', None)
-    outputs = model.generate(**batch)
+    outputs = model(**batch)
     print(outputs)
     break
 
