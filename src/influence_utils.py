@@ -31,7 +31,7 @@ class EKFAC(Optimizer):
                 params = [mod.weight]
                 if mod.bias is not None:
                     params.append(mod.bias)
-                d = {'params': params, 'mod': mod, 'layer_type': mod_class, 'A': [], 'S': []}
+                d = {'params': params, 'mod': mod, 'layer_type': mod_class}
                 self.params.append(d)
         super(EKFAC, self).__init__(self.params, {})
 
@@ -48,16 +48,31 @@ class EKFAC(Optimizer):
             if mod.bias is not None:
                 ones = torch.ones_like(x[:1])
                 x = torch.cat([x, ones], dim=0)
-            
-            if self.calc_act:
-                # Calculate covariance matrix for activations (A_{l-1})
-                group['A'].append(torch.mm(x, x.t()) / float(x.shape[1]))
 
             # Computation of psuedograd of layer output cov matrix for batch
             gy = gy.data.t()
 
-            # Calculate covariance matrix for layer outputs (S_{l})
-            group['S'].append(torch.mm(gy, gy.t()) / float(gy.shape[1]))
+            self.calc_A(group, x)
+            self.calc_S(group, gy)
+        
+    def calc_A(self, group, x):
+        if self.calc_act:
+            # Calculate covariance matrix for layer activations (A_{l})
+            if 'A' not in group:
+                group['A'] = torch.matmul(x, x.t())/float(x.shape[1])
+                group['A_count'] = 1
+            else:
+                torch.add(group['A'], torch.matmul(x, x.t())/float(x.shape[1]), out=group['A'])
+                group['A_count'] += 1
+            
+        
+    def calc_S(self, group, gy):
+            if 'S' not in group:
+                group['S'] = torch.matmul(gy, gy.t())/float(gy.shape[1])
+                group['S_count'] = 1
+            else:
+                torch.add(group['S'], torch.matmul(gy, gy.t())/float(gy.shape[1]), out=group['S'])
+                group['S_count'] += 1
 
     def _save_input(self, mod, i):
         """Saves input of layer to compute covariance."""
@@ -199,42 +214,42 @@ class EKFACInfluence(DataInfluence):
                 
         return influences
             
-
     def _compute_EKFAC_params(self, n_samples: int = 2):
         ekfac = EKFAC(self.module, 1e-5)
         loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
         for _, (input, _) in tqdm.tqdm(enumerate(self.cov_src_dataloader), total=len(self.cov_src_dataloader)):
             input = input.to(self.device)
             outputs = self.module(input)
+            ekfac.calc_act = True
             output_probs = torch.softmax(outputs, dim=-1)
             distribution = dist.Categorical(output_probs)
             for _ in range(n_samples):
                 samples = distribution.sample()
                 loss = loss_fn(outputs, samples)
                 loss.backward(retain_graph=True)
-                ekfac.step()
+                ekfac.step()      
+                
                 self.module.zero_grad()
                 ekfac.zero_grad()
                 G_list = {}
+                ekfac.calc_act = False
         # Compute average A and S
         for group in ekfac.param_groups:
             G_list[group['mod']] = {}
-            ekfac.calc_act = True
             with autocast():
-                A = torch.stack(group['A']).mean(dim=0)
-                S = torch.stack(group['S']).mean(dim=0)
-
-                print(f'Activation cov matrix shape {A.shape}')
-                print(f'Layer output cov matrix shape {S.shape}')
+                A = (group['A']/float(group['A_count'])).to('cpu')
+                S = (group['S']/float(group['S_count'])).to('cpu')
             
                 # Compute eigenvalues and eigenvectors of A and S
-                la, Qa = torch.linalg.eigh(A)
-                ls, Qs = torch.linalg.eigh(S)
+                la, Qa = torch.linalg.eigh(A, UPLO='U').to(self.device)
+                ls, Qs = torch.linalg.eigh(S, UPLO='U').to(self.device)
                 eigenval_diags = torch.outer(la, ls).flatten(start_dim=0)
-                
 
             G_list[group['mod']]['Qa'] = Qa
             G_list[group['mod']]['Qs'] = Qs
             G_list[group['mod']]['lambda'] = eigenval_diags
+            # For testing purposes
+            G_list[group['mod']]['A'] = A
+            G_list[group['mod']]['S'] = S
             
         return G_list
