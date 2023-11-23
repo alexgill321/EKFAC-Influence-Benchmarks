@@ -6,3 +6,7 @@ pandas
 gensim
 torchvision
 torchinfo
+dash
+dash_canvas
+opencv-python
+numpy==1.23.1

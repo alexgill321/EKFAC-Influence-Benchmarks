@@ -7,7 +7,7 @@ import json
 import random
 from torchinfo import summary
 import os
-
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Set the random seed for reproducibility
 seed = 42
 random.seed(seed)
@@ -70,10 +70,11 @@ def train(model, train_loader, val_loader, criterion, optimizer, epochs=10):
             outputs = model(inputs)
             
             # Compute cross-entropy loss
-            loss_ce = criterion(outputs, labels)
-            
-            # Combine the two losses
-            loss = loss_ce
+            try:
+                loss = criterion(outputs, labels)
+            except:
+                # Compute mean squared error
+                loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
             
             loss.backward()
             optimizer.step()
@@ -116,10 +117,11 @@ def validate(model, val_loader, criterion):
             outputs = model(inputs)
             
             # Compute cross-entropy loss
-            loss_ce = criterion(outputs, labels)
-            
-            # Combine the two losses
-            loss = loss_ce
+            try:
+                loss = criterion(outputs, labels)
+            except:
+                # Compute mean squared error
+                loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
             
             total_loss += loss.item()
             
@@ -150,13 +152,14 @@ def test(model, test_loader, criterion, get_preds_only = False, train_loader = N
                 outputs = model(inputs)
 
                 # Compute cross-entropy loss
-                loss_ce = criterion(outputs, labels)
-
-                # Compute mean squared error
-                #loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
+                try:
+                    loss = criterion(outputs, labels)
+                except:
+                    # Compute mean squared error
+                    loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
 
                 # Combine the two losses
-                loss = loss_ce #+ loss_mse
+                #loss = loss_ce #+ loss_mse
 
                 total_loss += loss.item()
 
@@ -181,13 +184,11 @@ def test(model, test_loader, criterion, get_preds_only = False, train_loader = N
             outputs.retain_grad()
 
             # Compute cross-entropy loss
-            loss_ce = criterion(outputs, labels)
-
-            # Compute mean squared error
-            #loss_mse = mse_criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
-
-            # Combine the two losses
-            loss = loss_ce #+ loss_mse
+            try:
+                loss = criterion(outputs, labels)
+            except:
+                # Compute mean squared error
+                loss = criterion(outputs, torch.nn.functional.one_hot(labels, num_classes=10).float())
 
             loss.backward()
 
@@ -205,10 +206,10 @@ def get_model():
 
 
 # Function to load the model from a saved state
-def load_model(model, filepath='../models/transformer_trained_model.pth'):
-    model.load_state_dict(torch.load(filepath))
+def load_model(model, filepath='../models/linear_trained_model.pth'):
+    model.load_state_dict(torch.load(filepath, map_location=torch.device(device)))
     model.eval()
-    return model
+    return model.to(device)
 
 
 if __name__ == '__main__':
@@ -217,7 +218,7 @@ if __name__ == '__main__':
     model = model.to(device)
     summary(model, (128, 784))
     # Train the model
-    train(model, train_loader, val_loader, criterion, optimizer, epochs=10)
+    train(model, train_loader, val_loader, criterion, optimizer, epochs=20)
 
     # Test the model
     test_loss, test_accuracy = test(model, test_loader, criterion)
