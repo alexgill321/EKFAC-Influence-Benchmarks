@@ -241,13 +241,13 @@ class EKFACInfluence(DataInfluence):
                 S = (group['S']/float(group['S_count'])).to('cpu')
             
                 # Compute eigenvalues and eigenvectors of A and S
-                la, Qa = torch.linalg.eigh(A, UPLO='U').to(self.device)
-                ls, Qs = torch.linalg.eigh(S, UPLO='U').to(self.device)
+                la, Qa = torch.linalg.eigh(A, UPLO='U')
+                ls, Qs = torch.linalg.eigh(S, UPLO='U')
                 eigenval_diags = torch.outer(la, ls).flatten(start_dim=0)
 
-            G_list[group['mod']]['Qa'] = Qa
-            G_list[group['mod']]['Qs'] = Qs
-            G_list[group['mod']]['lambda'] = eigenval_diags
+            G_list[group['mod']]['Qa'] = Qa.to(self.device)
+            G_list[group['mod']]['Qs'] = Qs.to(self.device)
+            G_list[group['mod']]['lambda'] = eigenval_diags.to(self.device)
             # For testing purposes
             G_list[group['mod']]['A'] = A
             G_list[group['mod']]['S'] = S
