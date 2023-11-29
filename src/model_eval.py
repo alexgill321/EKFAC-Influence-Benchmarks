@@ -25,6 +25,22 @@ train_dataset, val_dataset = random_split(train_dataset, [train_size, val_size])
 train_loader = DataLoader(dataset=train_dataset, batch_size=64, shuffle=True)
 
 
+from linear_nn import get_model, load_model
+import torch
+import os
+from torchinfo import summary
+
+net, _, _ = get_model()
+model = load_model(net, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../models/linear_trained_model.pth'))
+summary(model, (1, 784))
+
+def run_model(img : np.array):
+    x_data = torch.tensor(img).view(1, 28**2)
+    results = model(x_data)
+    print(results)
+    _, pred = torch.max(results.data, 1)
+    return pred
+
 # Function to add Gaussian noise to training examples
 def add_gaussian_noise(data, mean=0, std=0.1):
     noisy_data = data + torch.randn_like(data) * std + mean
@@ -36,16 +52,21 @@ def plot_images(original_images, noisy_images, num_examples=5):
         original_image = original_images[i].view(28, 28).numpy()
         noisy_image = noisy_images[i].view(28, 28).numpy()
 
+        original_image_pred = run_model(original_image)
+        noisy_image_pred = run_model(noisy_image)
+
         plt.subplot(2, num_examples, i + 1)
         plt.imshow(original_image, cmap='gray')
-        plt.title(f'Original {i + 1}')
+        #plt.title(f'Original {i + 1}')
+        plt.title(f'Pred {original_image_pred[0]}')
         plt.axis('off')
 
         plt.subplot(2, num_examples, num_examples + i + 1)
         plt.imshow(noisy_image, cmap='gray')
-        plt.title(f'Noisy {i + 1}')
+        #plt.title(f'Noisy {i + 1}')
+        plt.title(f'Pred {noisy_image_pred[0]}')
         plt.axis('off')
-
+    plt.suptitle('Original vs Noisy')
     plt.show()
 
 # Function to loop through noisy examples
@@ -58,6 +79,8 @@ def noisy_examples(loader, num_examples=5, noise_mean=0, noise_std=0.1):
         plot_images(original_images, noisy_images, num_examples)
 
         break  # Comment this line to loop through all batches
+
+
 
 # Example usage:
 noisy_examples(train_loader, num_examples=5)
