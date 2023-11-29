@@ -18,9 +18,10 @@ def main():
         ])
     # Download MNIST dataset and create DataLoader
     train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
+    train_subset = Subset(train_dataset, range(1000))
     test_dataset = Subset(train_dataset, range(500))
     
-    influence_model = EKFACInfluence(model, layers=['fc1', 'fc2'], influence_src_dataset=train_dataset, batch_size=128, cov_batch_size=1)
+    influence_model = EKFACInfluence(model, layers=['fc1', 'fc2'], influence_src_dataset=train_subset, batch_size=128, cov_batch_size=1)
     influences = influence_model.influence(test_dataset)
 
     for layer in influences:

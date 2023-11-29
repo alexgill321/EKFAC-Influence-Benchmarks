@@ -174,9 +174,7 @@ class EKFACInfluence(DataInfluence):
                 else:
                     grads = layer.weight.grad
 
-                p1 = torch.matmul(Qs, torch.matmul(grads, torch.t(Qa)))
-                p2 = torch.reciprocal(eigenval_diag+eps).reshape(p1.shape[0], -1)
-                ihvp = torch.flatten(torch.matmul(torch.t(Qs), torch.matmul((p1/p2), Qa)))
+                ihvp = self.ihvp_mod(grads, Qa, Qs, eigenval_diag, eps)
                 query_grads[layer].append(ihvp)
 
         criterion = torch.nn.CrossEntropyLoss(reduction='none')
@@ -213,7 +211,45 @@ class EKFACInfluence(DataInfluence):
                 influence_src_grads[layer] = []
                 
         return influences
-            
+    
+    def ihvp(
+            self,
+            grads: List[Tensor],
+            Qa: Tensor,
+            Qs: Tensor,
+            eigenval_diag: Tensor,
+            eps: float = 1e-5,
+    ) -> Tensor:
+        t_Qa = torch.t(Qa)
+        t_Qs = torch.t(Qs)
+        mm1 = torch.matmul(grads, t_Qa)
+        mm2 = torch.matmul(Qs, mm1)
+        rec = torch.reciprocal(eigenval_diag + eps)
+        rec_res = rec.reshape(mm2.shape[0], -1)
+        mm3 = torch.matmul(mm2/rec_res, Qa)
+        ihvp = torch.matmul(t_Qs, mm3)
+        ihvp_flat = torch.flatten(ihvp)
+        return ihvp_flat    
+
+    def ihvp_mod(
+            self,
+            grads: List[Tensor],
+            Qa: Tensor,
+            Qs: Tensor,
+            eigenval_diag: Tensor,
+            eps: float = 1e-5,
+    ) -> Tensor:
+        t_Qa = torch.t(Qa)
+        t_Qs = torch.t(Qs)
+
+        inner_num = torch.matmul(t_Qs, torch.matmul(grads, Qa))
+        inv_diag = 1/(eigenval_diag + eps)
+        inner_prod = torch.div(inner_num, inv_diag)
+        outer_prod = torch.matmul(Qs, torch.matmul(inner_prod, t_Qa))
+        ihvp = torch.flatten(outer_prod)
+
+        return ihvp
+
     def _compute_EKFAC_params(self, n_samples: int = 2):
         ekfac = EKFAC(self.module, 1e-5)
         loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
@@ -243,7 +279,7 @@ class EKFACInfluence(DataInfluence):
                 # Compute eigenvalues and eigenvectors of A and S
                 la, Qa = torch.linalg.eigh(A, UPLO='U')
                 ls, Qs = torch.linalg.eigh(S, UPLO='U')
-                eigenval_diags = torch.outer(la, ls).flatten(start_dim=0)
+                eigenval_diags = torch.outer(la, ls).t()
 
             G_list[group['mod']]['Qa'] = Qa.to(self.device)
             G_list[group['mod']]['Qs'] = Qs.to(self.device)
