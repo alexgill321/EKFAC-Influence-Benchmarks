@@ -212,6 +212,95 @@ class EKFACInfluence(DataInfluence):
                 
         return influences
     
+    def kfac_influence(
+            self,
+            query_dataset: Dataset,
+            topk: int = 1,
+            eps: float = 1e-5,
+            **kwargs: Any,
+        ) -> Dict:
+
+        influences: Dict[str, Any] = {}
+        query_grads: Dict[str, List[Tensor]] = {}
+        influence_src_grads: Dict[str, List[Tensor]] = {}
+
+        query_dataloader = DataLoader(
+            query_dataset, batch_size=1, shuffle=False
+        )
+
+        layer_modules = [
+            common._get_module_from_name(self.module, layer) for layer in self.layers
+        ]
+
+        G_list = self._compute_EKFAC_params()
+
+        criterion = torch.nn.NLLLoss()
+        print(f'Cacultating query gradients on trained model')
+        for layer in layer_modules:
+            query_grads[layer] = []
+            influence_src_grads[layer] = []
+        
+        for _, (inputs, targets) in tqdm.tqdm(enumerate(query_dataloader), total=len(query_dataloader)):
+            self.module.zero_grad()
+            inputs = inputs.to(self.device)
+            targets = targets.to(self.device)
+            outputs = self.module(inputs)
+
+            loss = criterion(outputs, targets.view(-1))
+            loss.backward()
+
+            for layer in layer_modules:
+                A_inv = G_list[layer]['A']
+                S_inv = G_list[layer]['S']
+
+                if not torch.equal(torch.t(A), A):
+                    print('A is not symmetric')
+                if not torch.equal(torch.t(S), S):
+                    print('S is not symmetric')
+                if layer.bias is not None:
+                    grad_bias = layer.bias.grad
+                    grad_weights = layer.weight.grad
+                    grad_bias = grad_bias.reshape(-1, 1)
+                    grads = torch.cat((grad_weights, grad_bias), dim=1)
+                else:
+                    grads = layer.weight.grad
+
+                ihvp = torch.matmul(S_inv, torch.matmul(grads, A_inv)).flatten()
+                query_grads[layer].append(ihvp)
+
+        criterion = torch.nn.CrossEntropyLoss(reduction='none')
+        print(f'Cacultating training src gradients on trained model')
+        for i, (inputs, targets) in tqdm.tqdm(enumerate(self.influence_src_dataloader), total=len(self.influence_src_dataloader)):
+            self.module.zero_grad()
+            inputs = inputs.to(self.device)
+            targets = targets.to(self.device)
+            outputs = self.module(inputs)
+            loss = criterion(outputs, targets.view(-1))
+            for single_loss in loss:
+                single_loss.backward(retain_graph=True)
+
+                for layer in layer_modules:
+                    if layer.bias is not None:
+                        grad_bias = layer.bias.grad
+                        grad_weights = layer.weight.grad
+                        grad_bias = grad_bias.reshape(-1, 1)
+                        grads = torch.cat([grad_weights, grad_bias], dim=1)
+                    else:
+                        grads = layer.weight.grad
+                    influence_src_grads[layer].append(torch.flatten(grads))
+
+            # Calculate influences by batch to save memory
+            for layer in layer_modules:
+                query_grad_matrix = torch.stack(query_grads[layer], dim=0)
+                influence_src_grad_matrix = torch.stack(influence_src_grads[layer], dim=0)
+                tinf = torch.matmul(query_grad_matrix, torch.t(influence_src_grad_matrix))
+                tinf = tinf.detach().cpu()
+                if layer not in influences:
+                    influences[layer] = tinf
+                else:
+                    influences[layer] = torch.cat((influences[layer], tinf), dim=1)
+                influence_src_grads[layer] = []
+    
     def ihvp(
             self,
             grads: List[Tensor],
@@ -242,10 +331,10 @@ class EKFACInfluence(DataInfluence):
         t_Qa = torch.t(Qa)
         t_Qs = torch.t(Qs)
 
-        inner_num = torch.matmul(t_Qs, torch.matmul(grads, Qa))
+        inner_num = torch.matmul(Qs, torch.matmul(grads, t_Qa))
         inv_diag = 1/(eigenval_diag + eps)
         inner_prod = torch.div(inner_num, inv_diag)
-        outer_prod = torch.matmul(Qs, torch.matmul(inner_prod, t_Qa))
+        outer_prod = torch.matmul(t_Qs, torch.matmul(inner_prod, Qa))
         ihvp = torch.flatten(outer_prod)
 
         return ihvp
@@ -275,7 +364,10 @@ class EKFACInfluence(DataInfluence):
             with autocast():
                 A = (group['A']/float(group['A_count'])).to('cpu')
                 S = (group['S']/float(group['S_count'])).to('cpu')
-            
+
+                det_A = torch.det(A)
+                det_S = torch.det(S)
+
                 # Compute eigenvalues and eigenvectors of A and S
                 la, Qa = torch.linalg.eigh(A, UPLO='U')
                 ls, Qs = torch.linalg.eigh(S, UPLO='U')
@@ -287,5 +379,8 @@ class EKFACInfluence(DataInfluence):
             # For testing purposes
             G_list[group['mod']]['A'] = A
             G_list[group['mod']]['S'] = S
+            G_list[group['mod']]['A_inv'] = torch.inverse(A)
+            G_list[group['mod']]['S_inv'] = torch.inverse(S)
+
             
         return G_list
