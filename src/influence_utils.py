@@ -153,11 +153,24 @@ class EKFACInfluence(DataInfluence):
             query_grads[layer] = []
             influence_src_grads[layer] = []
 
-        for _, (inputs, targets) in tqdm.tqdm(enumerate(query_dataloader), total=len(query_dataloader)):
+        influence_set_true_labels = []
+
+        # one time exercise to get all the labels for influence test set
+        for i, (inputs, targets) in tqdm.tqdm(enumerate(self.influence_src_dataloader),
+                                                      total=len(self.influence_src_dataloader)):
+            inputs = inputs.to(self.device)
+            targets = targets.to(self.device)
+            influence_set_true_labels.extend(targets.view(-1).tolist())
+
+        original_label_to_dataset_labels_mapping_l1 = {}
+
+        for example_num, (inputs, targets) in tqdm.tqdm(enumerate(query_dataloader), total=len(query_dataloader)):
             self.module.zero_grad()
             inputs = inputs.to(self.device)
             targets = targets.to(self.device)
             outputs = self.module(inputs)
+
+            original_label_to_dataset_labels_mapping_l1[example_num] = {targets[0].item(): influence_set_true_labels}
 
             loss = criterion(outputs, targets.view(-1))
             loss.backward()
@@ -212,7 +225,7 @@ class EKFACInfluence(DataInfluence):
                     influences[layer] = torch.cat((influences[layer], tinf), dim=1)
                 influence_src_grads[layer] = []
                 
-        return influences
+        return influences, original_label_to_dataset_labels_mapping_l1
             
     def _compute_EKFAC_params(self, n_samples: int = 2):
         ekfac = EKFAC(self.module, 1e-5)
