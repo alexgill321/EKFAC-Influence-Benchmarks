@@ -57,6 +57,32 @@ class EKFAC(Optimizer):
 
             self.calc_A(group, x)
             self.calc_S(group, gy)
+    def calc_A(self, group, x):
+        if self.calc_act:
+            # Calculate covariance matrix for layer activations (A_{l})
+            if 'A' not in group:
+                group['A'] = torch.matmul(x, x.t())/float(x.shape[1])
+                group['A_count'] = 1
+            else:
+                torch.add(group['A'], torch.matmul(x, x.t())/float(x.shape[1]), out=group['A'])
+                group['A_count'] += 1
+            
+        
+    def calc_S(self, group, gy):
+            if 'S' not in group:
+                group['S'] = torch.matmul(gy, gy.t())/float(gy.shape[1])
+                group['S_count'] = 1
+            else:
+                torch.add(group['S'], torch.matmul(gy, gy.t())/float(gy.shape[1]), out=group['S'])
+                group['S_count'] += 1
+
+    def _save_input(self, mod, i):
+        """Saves input of layer to compute covariance."""
+        self.state[mod]['x'] = i[0]
+
+    def _save_grad_output(self, mod, grad_input, grad_output):
+        """Saves grad on output of layer to compute covariance."""
+        self.state[mod]['gy'] = grad_output[0] * grad_output[0].size(0)
 
 class Visualizer(Optimizer):
     def __init__(self, net, eps):
@@ -381,10 +407,9 @@ class EKFACInfluence(DataInfluence):
             outputs = self.module(input)
             ekfac.calc_act = True
             output_probs = torch.softmax(outputs, dim=-1)
-            distribution = dist.Categorical(output_probs)
-            for _ in range(n_samples):
-                samples = distribution.sample()
-                loss = loss_fn(outputs, samples)
+            samples = torch.multinomial(output_probs, n_samples, replacement=True).squeeze()
+            for sample in samples:
+                loss = loss_fn(outputs, torch.unsqueeze(sample, dim=0))
                 loss.backward(retain_graph=True)
                 ekfac.step()      
                 
