@@ -1,3 +1,5 @@
+import os
+import re
 import torch
 from torch.cuda.amp import autocast
 from torch.optim.optimizer import Optimizer
@@ -12,6 +14,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch.optim.optimizer import Optimizer
 import tqdm
 import torch.nn as nn
+import glob
 
 from matplotlib import pyplot as plt
 
@@ -458,6 +461,9 @@ class EKFACInfluence(DataInfluence):
 
         return ihvp
 
+    def _src_grads():
+        pass 
+
     def _compute_EKFAC_params(self, n_samples: int = 2):
         ekfac = EKFAC(self.module, 1e-5)
         loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
@@ -598,3 +604,5 @@ class ComputeCovG:
         else:
             cov_g = g.t() @ (g / batch_size)
         return cov_g
+    
+   

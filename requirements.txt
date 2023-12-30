@@ -12,3 +12,4 @@ opencv-python
 numpy==1.23.1
 matplotlib
 ipykernel
+captum
