@@ -1,15 +1,16 @@
 #%%
-from torchvision import datasets, transforms
+from torchvision import datasets
 from torch.utils.data import Subset
 import os
 import ast
-import plotly.graph_objects as go
 
 train_dataset = datasets.MNIST(root='../data', train=True, download=True)
 test_dataset = Subset(train_dataset, range(500))
 
 #%%
 array_list = []
+
+# Replace with the path to your top_influences.txt file
 with open(os.getcwd() + '/top_influences.txt', 'r') as file:
     for _ in range(2):  # Skip the first two lines
         file.readline()
@@ -25,56 +26,27 @@ with open(os.getcwd() + '/top_influences.txt', 'r') as file:
         except ValueError as e:
             continue
 
+#%%
+import matplotlib.pyplot as plt
 
-# %%
-for i, list in enumerate(array_list):
-    fig = go.Figure()
+for j, list in enumerate(array_list):
+    fig, axes = plt.subplots(1, 6, figsize=(15, 3)) 
+    # Iterate over image paths and axes to plot each image
+    for i, (index, ax) in enumerate(zip(list, axes[:5])):
+        image = train_dataset[index][0]  # Load the image
+        # Display the image on the current axis
+        ax.imshow(image)
+        ax.axis('off')  # Turn off axis labels
+        ax.set_title(f"Image {index}")
+    
+    image = train_dataset[j][0]
+    axes[5].imshow(image)
+    axes[5].axis('off')
+    axes[5].set_title(f"Actual Image {j}")
 
-# Iterate over image paths to add each image to the subplot
-    for j, index in enumerate(list):
-        # Open the image file
-        image = train_dataset[index][0]
+    # Adjust layout and display the plot
+    plt.tight_layout()
+    plt.show()
 
-        # Add image to subplot
-        fig.add_trace(
-            go.Image(
-                z=image,
-                hoverinfo='none',
-                x0=i,
-                dx=1,
-                y0=0,
-                dy=1,
-            )
-        )
-
-    # Update layout
-    fig.update_layout(
-        xaxis=dict(
-            showline=False,
-            showgrid=False,
-            showticklabels=False,
-        ),
-        yaxis=dict(
-            showline=False,
-            showgrid=False,
-            showticklabels=False,
-        ),
-        images=[
-            dict(
-                source=train_dataset[index][0],
-                x=i,
-                y=0,
-                sizex=1,
-                sizey=1,
-                sizing="stretch",
-                opacity=1,
-                layer="below",
-            )
-            for i, index in enumerate(list)
-        ],
-    )
-
-    # Show the plot
-    fig.show()
-    break
-# %%
+    if j == 5:
+        break
