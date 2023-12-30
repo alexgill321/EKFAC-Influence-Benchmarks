@@ -1,2 +1,9 @@
 \data
 *.pyc
+Lib/
+Scripts/
+share/
+Include/
+etc/
+.vscode/
+*.cfg
