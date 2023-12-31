@@ -48,5 +48,5 @@ for j, list in enumerate(array_list):
     plt.tight_layout()
     plt.show()
 
-    if j == 5:
+    if j == 20:
         break

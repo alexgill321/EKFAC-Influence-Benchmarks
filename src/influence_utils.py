@@ -14,9 +14,6 @@ from torch.utils.data import DataLoader, Dataset
 from torch.optim.optimizer import Optimizer
 import tqdm
 import torch.nn as nn
-import glob
-
-from matplotlib import pyplot as plt
 
 class EKFAC(Optimizer):
     def __init__(self, net, eps):
@@ -336,6 +333,7 @@ class EKFACInfluence(DataInfluence):
             query_grads[layer] = []
             influence_src_grads[layer] = []
         
+        # Computing query ihvps
         for _, (inputs, targets) in tqdm.tqdm(enumerate(query_dataloader), total=len(query_dataloader)):
             self.module.zero_grad()
             inputs = inputs.to(self.device)
@@ -359,7 +357,8 @@ class EKFACInfluence(DataInfluence):
 
                 # Essentially the only difference between KFAC and EKFAC. The ihvp just 
                 # uses the inverted S and A matrices. See eq. 17 in the paper.
-                ihvp = torch.matmul(inv_S, torch.matmul(grads, inv_A)).flatten()
+                ihvp = torch.matmul(inv_S, torch.matmul(grads, inv_A))
+                ihvp = ihvp.flatten()
                 query_grads[layer].append(ihvp)
 
         criterion = torch.nn.CrossEntropyLoss(reduction='none')
@@ -381,7 +380,7 @@ class EKFACInfluence(DataInfluence):
                         grads = torch.cat([grad_weights, grad_bias], dim=1)
                     else:
                         grads = layer.weight.grad
-                    influence_src_grads[layer].append(torch.flatten(grads))
+                    influence_src_grads[layer].append(grads.flatten())
 
             # Calculate influences by batch to save memory
             for layer in layer_modules:
