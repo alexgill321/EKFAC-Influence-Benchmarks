@@ -1,4 +1,4 @@
-from torch_influence import BaseObjective, LissaInfluenceModule
+from torch_influence import BaseObjective, LiSSAInfluenceModule, CGInfluenceModule
 from torchvision import datasets, transforms
 import torch
 from linear_nn import get_model, load_model
@@ -7,6 +7,7 @@ import os
 from tqdm import tqdm
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+L2_WEIGHT = 1e-4
 
 def main():
     net, _, _= get_model()
@@ -20,7 +21,7 @@ def main():
     # Download MNIST dataset and create DataLoader
     train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
     train_dataset = Subset(train_dataset, range(1000))
-    test_dataset = Subset(train_dataset, range(500))
+    test_dataset = Subset(train_dataset, range(10))
 
     class ClassObjective(BaseObjective):
         def train_outputs(self, model, batch):
@@ -31,32 +32,46 @@ def main():
             return criterion(outputs, batch[1])
         
         def train_regularization(self, params):
-            return torch.square(params.norm())
+            return L2_WEIGHT * torch.square(params.norm())
         
         def test_loss(self, model, params, batch):
             outputs = model(batch[0])
             criterion = torch.nn.CrossEntropyLoss()
             return criterion(outputs, batch[1])
         
-    module = LissaInfluenceModule(
+    train_dataloader = DataLoader(train_dataset, batch_size=32)
+    test_dataloader = DataLoader(test_dataset, batch_size=32)
+        
+    module = LiSSAInfluenceModule(
         model = model,
         objective = ClassObjective(),
-        train_loader = DataLoader(train_dataset, batch_size=32),
-        test_loader = DataLoader(test_dataset, batch_size=32),
+        train_loader = train_dataloader,
+        test_loader = test_dataloader,
         device=DEVICE,
-        damp=1e-4,
+        damp=1e-2,
         repeat=10,
-        depth=5000,
-        scale=.95,
+        depth=50,
+        scale=.995,
         gnh=True
     )
+
+    cg_module = CGInfluenceModule(
+        model = model,
+        objective = ClassObjective(),
+        train_loader = train_dataloader,
+        test_loader = test_dataloader,
+        device=DEVICE,
+        damp=1e-4,
+        gnh=False
+    )
     
-    train_idxs = list(range(train_dataset.shape[0]))
-    test_idxs = list(range(test_dataset.shape[0]))
+    train_idxs = list(train_dataset.indices)
+    test_idxs = list(test_dataset.indices)
 
     for test_idx in tqdm(test_idxs, desc="Computing Influences"):
-        module.compute_influence_on_test_loss(test_idx, train_idxs)
-        module.compute_influence_on_train_loss(test_idx, train_idxs)
+        influences = cg_module.influences(train_idxs=train_idxs, test_idxs=[test_idx])
+        print(influences.shape)
 
-
+if __name__ == '__main__':
+    main()
 
