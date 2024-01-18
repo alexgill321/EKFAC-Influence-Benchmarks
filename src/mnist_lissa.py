@@ -2,7 +2,7 @@ from torch_influence import BaseObjective, LiSSAInfluenceModule, CGInfluenceModu
 from torchvision import datasets, transforms
 import torch
 from linear_nn import get_model, load_model
-from torch.utils.data import Subset, DataLoader
+from torch.utils.data import Subset, DataLoader, Dataset
 import os
 from tqdm import tqdm
 
@@ -20,8 +20,20 @@ def main():
 
     # Download MNIST dataset and create DataLoader
     train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
-    train_dataset = Subset(train_dataset, range(1000))
-    test_dataset = Subset(train_dataset, range(10))
+
+    class CustomSubsetDataset(Dataset):
+        def __init__(self, dataset, indices):
+            self.dataset = dataset
+            self.indices = indices
+
+        def __getitem__(self, idx):
+            return self.dataset[self.indices[idx]]
+        
+        def __len__(self):
+            return len(self.indices)
+        
+    train_dataset_sub = CustomSubsetDataset(train_dataset, list(range(0, 1000)))
+    test_dataset_sub = CustomSubsetDataset(train_dataset, list(range(0, 10)))
 
     class ClassObjective(BaseObjective):
         def train_outputs(self, model, batch):
@@ -39,8 +51,8 @@ def main():
             criterion = torch.nn.CrossEntropyLoss()
             return criterion(outputs, batch[1])
         
-    train_dataloader = DataLoader(train_dataset, batch_size=32)
-    test_dataloader = DataLoader(test_dataset, batch_size=32)
+    train_dataloader = DataLoader(train_dataset_sub, batch_size=2)
+    test_dataloader = DataLoader(test_dataset_sub, batch_size=2)
         
     module = LiSSAInfluenceModule(
         model = model,
@@ -48,10 +60,10 @@ def main():
         train_loader = train_dataloader,
         test_loader = test_dataloader,
         device=DEVICE,
-        damp=1e-2,
+        damp=1e-4,
         repeat=10,
-        depth=50,
-        scale=.995,
+        depth=1000,
+        scale=100,
         gnh=True
     )
 
@@ -62,15 +74,21 @@ def main():
         test_loader = test_dataloader,
         device=DEVICE,
         damp=1e-4,
-        gnh=False
+        gnh=True
     )
     
-    train_idxs = list(train_dataset.indices)
-    test_idxs = list(test_dataset.indices)
+    train_idxs = list(range(1000))
+    test_idxs = list(range(10))
+    
+    influences = []
+    for test_idx in tqdm(test_idxs, desc='Computing Influences'):
+        influences.append(module.influences(train_idxs, [test_idx]))
 
-    for test_idx in tqdm(test_idxs, desc="Computing Influences"):
-        influences = cg_module.influences(train_idxs=train_idxs, test_idxs=[test_idx])
-        print(influences.shape)
+    k = 5
+    with open('top_influences_lissa.txt', 'w') as file:
+        for test_idx, influence in zip(test_idxs, influences):
+            top = torch.topk(influence, k=k).indices
+            file.write(f'Sample {test_idx}  Top {k} Influence Indexes: {[val for val in top.tolist()]}\n')
 
 if __name__ == '__main__':
     main()

@@ -11,9 +11,9 @@ test_dataset = Subset(train_dataset, range(500))
 array_list = []
 
 # Replace with the path to your top_influences.txt file
-with open(os.getcwd() + '/top_influences.txt', 'r') as file:
-    for _ in range(2):  # Skip the first two lines
-        file.readline()
+with open(os.getcwd() + '/top_influences_lissa.txt', 'r') as file:
+    # for _ in range(2):  # Skip the first two lines
+    #     file.readline()
 
     for line in file:
         line = line.strip()
