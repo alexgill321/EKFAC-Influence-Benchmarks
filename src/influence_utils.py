@@ -283,7 +283,7 @@ class EKFACInfluence(DataInfluence):
                 influence_src_grad_matrix = torch.stack(influence_src_grads[layer], dim=0)
                 # This is the actual influence calculation, multiplying the query gradients with the training gradients
                 tinf = torch.matmul(query_grad_matrix, torch.t(influence_src_grad_matrix))
-                tinf = tinf.detach().cpu()
+                tinf = tinf.detach().to('cpu')
                 if layer not in influences:
                     influences[layer] = tinf
                 else:
@@ -490,8 +490,8 @@ class EKFACInfluence(DataInfluence):
             G_list[group['mod']] = {}
             with autocast():
                 # Compute average A and S values
-                A = (group['A']/float(group['A_count'])).to('cpu')
-                S = (group['S']/float(group['S_count'])).to('cpu')
+                A = (group['A']/float(group['A_count'])).to(self.device)
+                S = (group['S']/float(group['S_count'])).to(self.device)
 
                 # Compute eigenvalues and eigenvectors of A and S
                 la, Qa = torch.linalg.eigh(A, UPLO='U')

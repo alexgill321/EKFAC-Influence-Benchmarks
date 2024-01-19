@@ -1,0 +1,24 @@
+Linear(in_features=784, out_features=256, bias=True)
+Shape: torch.Size([10, 1000])
+Sample 0  Top 5 Influence Indexes: [15, 16, 17, 12, 11]
+Sample 1  Top 5 Influence Indexes: [127, 125, 126, 121, 122]
+Sample 2  Top 5 Influence Indexes: [105, 104, 103, 102, 101]
+Sample 3  Top 5 Influence Indexes: [126, 125, 127, 112, 111]
+Sample 4  Top 5 Influence Indexes: [126, 127, 125, 86, 119]
+Sample 5  Top 5 Influence Indexes: [126, 125, 127, 120, 121]
+Sample 6  Top 5 Influence Indexes: [509, 506, 505, 510, 504]
+Sample 7  Top 5 Influence Indexes: [81, 82, 80, 84, 83]
+Sample 8  Top 5 Influence Indexes: [108, 104, 113, 114, 111]
+Sample 9  Top 5 Influence Indexes: [701, 702, 700, 703, 704]
+Linear(in_features=256, out_features=10, bias=True)
+Shape: torch.Size([10, 1000])
+Sample 0  Top 5 Influence Indexes: [551, 547, 548, 549, 550]
+Sample 1  Top 5 Influence Indexes: [119, 118, 120, 127, 124]
+Sample 2  Top 5 Influence Indexes: [71, 73, 72, 74, 77]
+Sample 3  Top 5 Influence Indexes: [509, 511, 508, 510, 507]
+Sample 4  Top 5 Influence Indexes: [503, 505, 504, 502, 501]
+Sample 5  Top 5 Influence Indexes: [665, 666, 668, 669, 667]
+Sample 6  Top 5 Influence Indexes: [238, 236, 237, 235, 234]
+Sample 7  Top 5 Influence Indexes: [629, 634, 633, 630, 632]
+Sample 8  Top 5 Influence Indexes: [125, 126, 124, 127, 112]
+Sample 9  Top 5 Influence Indexes: [127, 502, 84, 85, 83]

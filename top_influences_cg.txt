@@ -1,1 +1,0 @@
-Sample 2  Top 5 Influence Indexes: [0, 48, 47, 3, 46]

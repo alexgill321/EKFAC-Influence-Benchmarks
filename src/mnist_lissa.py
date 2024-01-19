@@ -84,11 +84,18 @@ def main():
     for test_idx in tqdm(test_idxs, desc='Computing Influences'):
         influences.append(module.influences(train_idxs, [test_idx]))
 
+    if not os.path.exists(os.getcwd() + '/results'):
+        os.mkdir(os.getcwd() + '/results')
+
     k = 5
-    with open('top_influences_lissa.txt', 'w') as file:
+    with open(os.getcwd() + '/results/top_influences_lissa.txt', 'w') as file:
         for test_idx, influence in zip(test_idxs, influences):
             top = torch.topk(influence, k=k).indices
             file.write(f'Sample {test_idx}  Top {k} Influence Indexes: {[val for val in top.tolist()]}\n')
+    
+    with open(os.getcwd() + '/results/lissa_influences.txt', 'w') as file:
+        for test_idx, influence in zip(test_idxs, influences):
+            file.write(f'{test_idx}: {influence.tolist()}\n')
 
 if __name__ == '__main__':
     main()
