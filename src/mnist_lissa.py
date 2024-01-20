@@ -86,7 +86,8 @@ def main():
         # influences.append(module.influences(train_idxs, [test_idx]))
         ihvp = module.stest([test_idx])
         ihvp_reshaped = module._reshape_like_params(ihvp)
-        ihvps.append(ihvp_reshaped[0].flatten())
+        ihvp_l1 = torch.cat((ihvp_reshaped[0], ihvp_reshaped[1].reshape(-1,1)), dim=1)
+        ihvps.append(ihvp_l1.flatten())
 
     if not os.path.exists(os.getcwd() + '/results'):
         os.mkdir(os.getcwd() + '/results')
