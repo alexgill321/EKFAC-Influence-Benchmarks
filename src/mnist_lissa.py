@@ -81,21 +81,29 @@ def main():
     test_idxs = list(range(10))
     
     influences = []
+    ihvps = []
     for test_idx in tqdm(test_idxs, desc='Computing Influences'):
-        influences.append(module.influences(train_idxs, [test_idx]))
+        # influences.append(module.influences(train_idxs, [test_idx]))
+        ihvp = module.stest([test_idx])
+        ihvp_reshaped = module._reshape_like_params(ihvp)
+        ihvps.append(ihvp_reshaped[0].flatten())
 
     if not os.path.exists(os.getcwd() + '/results'):
         os.mkdir(os.getcwd() + '/results')
 
-    k = 5
-    with open(os.getcwd() + '/results/top_influences_lissa.txt', 'w') as file:
-        for test_idx, influence in zip(test_idxs, influences):
-            top = torch.topk(influence, k=k).indices
-            file.write(f'Sample {test_idx}  Top {k} Influence Indexes: {[val for val in top.tolist()]}\n')
+    # k = 5
+    # with open(os.getcwd() + '/results/top_influences_lissa.txt', 'w') as file:
+    #     for test_idx, influence in zip(test_idxs, influences):
+    #         top = torch.topk(influence, k=k).indices
+    #         file.write(f'Sample {test_idx}  Top {k} Influence Indexes: {[val for val in top.tolist()]}\n')
     
-    with open(os.getcwd() + '/results/lissa_influences.txt', 'w') as file:
-        for test_idx, influence in zip(test_idxs, influences):
-            file.write(f'{test_idx}: {influence.tolist()}\n')
+    # with open(os.getcwd() + '/results/lissa_influences.txt', 'w') as file:
+    #     for test_idx, influence in zip(test_idxs, influences):
+    #         file.write(f'{test_idx}: {influence.tolist()}\n')
+    
+    with open(os.getcwd() + '/results/lissa_ihvps.txt', 'w') as file:
+        for test_idx, ihvp in zip(test_idxs, ihvps):
+            file.write(f'{test_idx}: {ihvp.tolist()}\n')
 
 if __name__ == '__main__':
     main()

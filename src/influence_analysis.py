@@ -81,4 +81,4 @@ if __name__ == '__main__':
     # Replace with the path to your top_influences.txt file
     # plot_top_influences(os.getcwd() + '/results/top_influences.txt', 5)
     # plot_top_influences(os.getcwd() + '/results/top_influences_lissa.txt', 5)
-    influence_correlation(os.getcwd() + '/results/lissa_influences.txt', os.getcwd() + '/results/kfac_influences_Linear(in_features=784, out_features=256, bias=True).txt')
+    influence_correlation(os.getcwd() + '/results/lissa_ihvps.txt', os.getcwd() + '/results/ihvps_Linear(in_features=784, out_features=256, bias=True).txt')

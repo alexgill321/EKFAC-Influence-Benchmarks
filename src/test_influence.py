@@ -33,7 +33,6 @@ def main():
     with open(os.getcwd() + '/results/top_influences.txt', 'w') as file:
         for layer in influences:
             file.write(f'{layer}\n')
-            file.write(f'Shape: {influences[layer].shape}\n')
             for i, influence in enumerate(influences[layer]):
                 top = torch.topk(influence, k=k).indices
                 file.write(f'Sample {i}  Top {k} Influence Indexes: {[val for val in top.tolist()]}\n')

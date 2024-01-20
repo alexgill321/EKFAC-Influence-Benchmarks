@@ -105,7 +105,7 @@ class EKFAC(Optimizer):
 
     def _save_grad_output(self, mod, grad_input, grad_output):
         """Saves grad on output of layer to compute covariance."""
-        self.state[mod]['gy'] = grad_output[0] * grad_output[0].size(0)
+        self.state[mod]['gy'] = grad_output[0] * grad_output[0].size(1)
 
 class EKFACInfluence(DataInfluence):
     def __init__(
@@ -327,7 +327,7 @@ class EKFACInfluence(DataInfluence):
 
         G_list = self._compute_EKFAC_params()
 
-        criterion = torch.nn.NLLLoss()
+        criterion = torch.nn.CrossEntropyLoss()
         print(f'Cacultating query gradients on trained model')
         for layer in layer_modules:
             query_grads[layer] = []
@@ -360,6 +360,11 @@ class EKFACInfluence(DataInfluence):
                 ihvp = torch.matmul(inv_S, torch.matmul(grads, inv_A))
                 ihvp = ihvp.flatten()
                 query_grads[layer].append(ihvp)
+
+        for layer in layer_modules:
+            with open(os.getcwd() + f'/results/ihvps_{layer}.txt', 'w') as file:
+                for test_idx, ihvp in enumerate(query_grads[layer]):
+                    file.write(f'{test_idx}: {ihvp.tolist()}\n')
 
         criterion = torch.nn.CrossEntropyLoss(reduction='none')
         print(f'Cacultating training src gradients on trained model')
@@ -465,7 +470,7 @@ class EKFACInfluence(DataInfluence):
 
     def _compute_EKFAC_params(self, n_samples: int = 2):
         ekfac = EKFAC(self.module, 1e-5)
-        loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
+        loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
         for _, (input, _) in tqdm.tqdm(enumerate(self.cov_src_dataloader), total=len(self.cov_src_dataloader)):
             input = input.to(self.device)
             outputs = self.module(input)
@@ -482,20 +487,20 @@ class EKFACInfluence(DataInfluence):
                 ekfac.step()      
                 self.module.zero_grad()
                 ekfac.zero_grad()
-                G_list = {}
                 ekfac.calc_act = False
-    
+
         # Compute average A and S
+        G_list = {}
         for group in ekfac.param_groups:
             G_list[group['mod']] = {}
             with autocast():
                 # Compute average A and S values
-                A = (group['A']/float(group['A_count'])).to(self.device)
-                S = (group['S']/float(group['S_count'])).to(self.device)
+                cov_a = (group['A']/float(group['A_count'])).to(self.device)
+                cov_s = (group['S']/float(group['S_count'])).to(self.device)
 
                 # Compute eigenvalues and eigenvectors of A and S
-                la, Qa = torch.linalg.eigh(A, UPLO='U')
-                ls, Qs = torch.linalg.eigh(S, UPLO='U')
+                la, Qa = torch.linalg.eigh(cov_a, UPLO='U')
+                ls, Qs = torch.linalg.eigh(cov_s, UPLO='U')
                 eigenval_diags = torch.outer(la, ls).t()
 
             # For each layer, store A, S, A_inv, S_inv, Qa, Qs, lambda
@@ -504,10 +509,10 @@ class EKFACInfluence(DataInfluence):
             G_list[group['mod']]['lambda'] = eigenval_diags.to(self.device)
 
             # In practice these will not need to be stored, but for now I am using them to debug.
-            G_list[group['mod']]['A'] = A
-            G_list[group['mod']]['S'] = S
-            G_list[group['mod']]['inv_A'] = torch.inverse(A + 1e-4*torch.eye(A.shape[0]).to(self.device))
-            G_list[group['mod']]['inv_S'] = torch.inverse(S + 1e-4*torch.eye(S.shape[0]).to(self.device))
+            G_list[group['mod']]['A'] = cov_a
+            G_list[group['mod']]['S'] = cov_s
+            G_list[group['mod']]['inv_A'] = torch.inverse(cov_a + 1e-4*torch.eye(cov_a.shape[0]).to(self.device))
+            G_list[group['mod']]['inv_S'] = torch.inverse(cov_s + 1e-4*torch.eye(cov_s.shape[0]).to(self.device))
             
         return G_list
 
