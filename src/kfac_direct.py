@@ -1,5 +1,7 @@
-from EKFAC_Pytorch.kfac import KFAC
+import os
+import sys
 from torchvision import datasets, transforms
+from kfac import KFAC
 import torch
 from linear_nn import get_model, load_model
 from torch.utils.data import Subset, DataLoader, Dataset
@@ -21,18 +23,36 @@ def main():
     train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
 
     train_subset = Subset(train_dataset, range(1000))
-    
-    kfac_conditioner = KFAC(
-        model=model, 
-        eps=1e-4,
-    )
+    train_loader = DataLoader(train_subset, batch_size=1, shuffle=True)
 
-    for i, (inputs, targets) in enumerate(tqdm(train_subset)):
-        model.zero_grad()
-        inputs, targets = inputs.to(DEVICE), targets.to(DEVICE)
-        outputs = model(inputs)
-        loss = torch.nn.CrossEntropyLoss()(outputs, targets)
-        loss.backward()
-        kfac_conditioner.step()
+    tester = KFACTester(model, 0.0001, train_loader)
+    tester.run()
+
+class KFACTester():
+    def __init__(self, model, eps, train_loader):
+        self.model = model
+        self.kfac = KFAC(
+            self.model,
+            eps=eps,
+        )
+        self.train_loader = train_loader
     
-    state = kfac_conditioner.state_dict()
+    def run(self):
+        for i, (inputs, targets) in enumerate(tqdm(self.train_loader)):
+            self.model.train()
+            inputs = inputs.to(DEVICE)
+            targets = targets.to(DEVICE)
+            outputs = self.model(inputs)
+            loss = torch.nn.CrossEntropyLoss()(outputs, targets)
+            loss.backward()
+            self.kfac.step(update_params=False)
+            self.model.zero_grad()
+
+        state = self.kfac.state_dict()
+        for mod in self.model.modules():
+            if isinstance(mod, torch.nn.Linear) or isinstance(mod, torch.nn.Conv2d):
+                res = state['state'][mod]
+                print(res)
+
+if __name__ == '__main__':
+    main()

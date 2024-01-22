@@ -22,7 +22,7 @@ def main():
     train_dataset = Subset(train_dataset, range(1000))
     test_dataset = Subset(train_dataset, range(10))
     
-    influence_model = EKFACInfluence(model, layers=['fc1', 'fc2'], influence_src_dataset=train_dataset, batch_size=128, cov_batch_size=1)
+    influence_model = EKFACInfluence(model, layers=['fc1', 'fc2'], influence_src_dataset=train_dataset, batch_size=1, cov_batch_size=1)
     influences = influence_model.kfac_influence(test_dataset)
     
 

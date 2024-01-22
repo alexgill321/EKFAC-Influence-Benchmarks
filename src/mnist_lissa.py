@@ -83,7 +83,7 @@ def main():
     influences = []
     ihvps = []
     for test_idx in tqdm(test_idxs, desc='Computing Influences'):
-        # influences.append(module.influences(train_idxs, [test_idx]))
+        influences.append(module.influences(train_idxs, [test_idx]))
         ihvp = module.stest([test_idx])
         ihvp_reshaped = module._reshape_like_params(ihvp)
         ihvp_l1 = torch.cat((ihvp_reshaped[0], ihvp_reshaped[1].reshape(-1,1)), dim=1)

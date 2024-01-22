@@ -105,7 +105,7 @@ class EKFAC(Optimizer):
 
     def _save_grad_output(self, mod, grad_input, grad_output):
         """Saves grad on output of layer to compute covariance."""
-        self.state[mod]['gy'] = grad_output[0] * grad_output[0].size(1)
+        self.state[mod]['gy'] = grad_output[0] * grad_output[0].size(0)
 
 class EKFACInfluence(DataInfluence):
     def __init__(
@@ -387,19 +387,19 @@ class EKFACInfluence(DataInfluence):
                         grads = layer.weight.grad
                     influence_src_grads[layer].append(grads.flatten())
 
-            # Calculate influences by batch to save memory
-            for layer in layer_modules:
-                query_grad_matrix = torch.stack(query_grads[layer], dim=0)
-                influence_src_grad_matrix = torch.stack(influence_src_grads[layer], dim=0)
-                tinf = torch.matmul(query_grad_matrix, torch.t(influence_src_grad_matrix))
-                tinf = tinf.detach().cpu()
-                if layer not in influences:
-                    influences[layer] = tinf
+        # Calculate influences by batch to save memory
+        influence_dict = {}
+        for layer in layer_modules:
+            for ihvp in query_grads[layer]:
+                influences = []
+                for grad in influence_src_grads[layer]:
+                    influences.append((grad @ ihvp).item())
+                if layer not in influence_dict:
+                    influence_dict[layer] = [torch.tensor(influences)]
                 else:
-                    influences[layer] = torch.cat((influences[layer], tinf), dim=1)
-                influence_src_grads[layer] = []
+                    influence_dict[layer].append(torch.tensor(influences))
 
-        return influences
+        return influence_dict
     
     def ihvp(
             self,
@@ -511,8 +511,11 @@ class EKFACInfluence(DataInfluence):
             # In practice these will not need to be stored, but for now I am using them to debug.
             G_list[group['mod']]['A'] = cov_a
             G_list[group['mod']]['S'] = cov_s
-            G_list[group['mod']]['inv_A'] = torch.inverse(cov_a + 1e-4*torch.eye(cov_a.shape[0]).to(self.device))
-            G_list[group['mod']]['inv_S'] = torch.inverse(cov_s + 1e-4*torch.eye(cov_s.shape[0]).to(self.device))
+
+            icov_a = (cov_a + 1e-1*torch.eye(cov_a.shape[0]).to(self.device)).inverse()
+            icov_s = (cov_s + 1e-1*torch.eye(cov_s.shape[0]).to(self.device)).inverse()
+            G_list[group['mod']]['inv_A'] = icov_a
+            G_list[group['mod']]['inv_S'] = icov_s
             
         return G_list
 
