@@ -23,14 +23,14 @@ def main():
     test_dataset = Subset(train_dataset, range(10))
     
     influence_model = EKFACInfluence(model, layers=['fc1', 'fc2'], influence_src_dataset=train_dataset, batch_size=1, cov_batch_size=1)
-    influences = influence_model.kfac_influence(test_dataset)
+    influences = influence_model.influence(test_dataset)
     
 
     if not os.path.exists(os.getcwd() + '/results'):
         os.mkdir(os.getcwd() + '/results')
 
     k = 5
-    with open(os.getcwd() + '/results/top_influences.txt', 'w') as file:
+    with open(os.getcwd() + '/results/ekfac_top_influences.txt', 'w') as file:
         for layer in influences:
             file.write(f'{layer}\n')
             for i, influence in enumerate(influences[layer]):
@@ -38,7 +38,7 @@ def main():
                 file.write(f'Sample {i}  Top {k} Influence Indexes: {[val for val in top.tolist()]}\n')
 
     for layer in influences:
-        with open(os.getcwd() + f'/results/kfac_influences_{layer}.txt', 'w') as file:
+        with open(os.getcwd() + f'/results/ekfac_influences_{layer}.txt', 'w') as file:
             for i, influence in enumerate(influences[layer]):
                 file.write(f'{i}: {influence.tolist()}\n')
         file.close()

@@ -201,7 +201,7 @@ class EKFACInfluence(DataInfluence):
 
         # Setting the loss to be NLL as we want to find training sequences that most influence the
         # probability of generating a completion distribution given a prompt. See eq. 24.
-        criterion = torch.nn.NLLLoss()
+        criterion = torch.nn.CrossEntropyLoss()
         print(f'Cacultating query gradients on trained model')
         for layer in layer_modules:
             query_grads[layer] = []
@@ -209,23 +209,23 @@ class EKFACInfluence(DataInfluence):
 
         influence_set_true_labels = []
 
-        # one time exercise to get all the labels for influence test set
-        for i, (inputs, targets) in tqdm.tqdm(enumerate(self.influence_src_dataloader),
-                                              total=len(self.influence_src_dataloader)):
-            inputs = inputs.to(self.device)
-            targets = targets.to(self.device)
-            influence_set_true_labels.extend(targets.view(-1).tolist())
+        # # one time exercise to get all the labels for influence test set
+        # for _, (inputs, targets) in tqdm.tqdm(enumerate(self.influence_src_dataloader),
+        #                                       total=len(self.influence_src_dataloader)):
+        #     inputs = inputs.to(self.device)
+        #     targets = targets.to(self.device)
+        #     influence_set_true_labels.extend(targets.view(-1).tolist())
 
-        original_label_to_dataset_labels_mapping_l1 = {}
+        # original_label_to_dataset_labels_mapping_l1 = {}
 
         # Computing the ihvp for each example in the dataset
-        for example_num, (inputs, targets) in tqdm.tqdm(enumerate(query_dataloader), total=len(query_dataloader)):
+        for _, (inputs, targets) in tqdm.tqdm(enumerate(query_dataloader), total=len(query_dataloader)):
             self.module.zero_grad()
             inputs = inputs.to(self.device)
             targets = targets.to(self.device)
             outputs = self.module(inputs)
 
-            original_label_to_dataset_labels_mapping_l1[example_num] = {targets[0].item(): influence_set_true_labels}
+            # original_label_to_dataset_labels_mapping_l1[example_num] = {targets[0].item(): influence_set_true_labels}
 
             loss = criterion(outputs, targets.view(-1))
             loss.backward()
@@ -252,8 +252,13 @@ class EKFACInfluence(DataInfluence):
                     grads = layer.weight.grad
 
                 # Computing the ihvp for the current example
-                ihvp = self.ihvp_mod(grads, Qa, Qs, eigenval_diag, eps)
+                ihvp = self.ihvp(grads, Qa, Qs, eigenval_diag, eps)
                 query_grads[layer].append(ihvp)
+
+        for layer in layer_modules:
+            with open(os.getcwd() + f'/results/ekfac_ihvps_{layer}.txt', 'w') as file:
+                for test_idx, ihvp in enumerate(query_grads[layer]):
+                    file.write(f'{test_idx}: {ihvp.tolist()}\n')
 
         # Setting the loss to be CrossEntropy as we want the autoregressive crossentropy of the models output distribution
         criterion = torch.nn.CrossEntropyLoss(reduction='none')
@@ -278,19 +283,18 @@ class EKFACInfluence(DataInfluence):
                     influence_src_grads[layer].append(torch.flatten(grads))
 
             # Calculate influences by batch to save memory
+            influence_dict = {}
             for layer in layer_modules:
-                query_grad_matrix = torch.stack(query_grads[layer], dim=0)
-                influence_src_grad_matrix = torch.stack(influence_src_grads[layer], dim=0)
-                # This is the actual influence calculation, multiplying the query gradients with the training gradients
-                tinf = torch.matmul(query_grad_matrix, torch.t(influence_src_grad_matrix))
-                tinf = tinf.detach().to('cpu')
-                if layer not in influences:
-                    influences[layer] = tinf
-                else:
-                    influences[layer] = torch.cat((influences[layer], tinf), dim=1)
-                influence_src_grads[layer] = []
+                for ihvp in query_grads[layer]:
+                    influences = []
+                    for grad in influence_src_grads[layer]:
+                        influences.append((grad @ ihvp).item())
+                    if layer not in influence_dict:
+                        influence_dict[layer] = [torch.tensor(influences)]
+                    else:
+                        influence_dict[layer].append(torch.tensor(influences))
 
-        return influences, original_label_to_dataset_labels_mapping_l1
+        return influences
 
     def kfac_influence(
             self,
@@ -407,7 +411,7 @@ class EKFACInfluence(DataInfluence):
             Qa: Tensor,
             Qs: Tensor,
             eigenval_diag: Tensor,
-            eps: float = 1e-5,
+            eps: float = 1e-2,
     ) -> Tensor:
         """ Computes the inverse hessian vector product using the eigenvalue decomposition
         of the covariance matrices A and S. See eq. 21 in the paper.
