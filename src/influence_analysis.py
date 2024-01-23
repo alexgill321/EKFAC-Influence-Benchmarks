@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import torch
 
 
-def plot_top_influences(inf_src, n):
+def plot_top_influences(inf_src, n, k=5):
 
     train_dataset = datasets.MNIST(root='../data', train=True, download=True)
     
@@ -32,7 +32,7 @@ def plot_top_influences(inf_src, n):
     for j, list in enumerate(array_list):
         fig, axes = plt.subplots(1, 6, figsize=(15, 3)) 
         # Iterate over image paths and axes to plot each image
-        for i, (index, ax) in enumerate(zip(list, axes[:5])):
+        for i, (index, ax) in enumerate(zip(list, axes[:k])):
             image = train_dataset[index][0]  # Load the image
             # Display the image on the current axis
             ax.imshow(image)
@@ -43,6 +43,8 @@ def plot_top_influences(inf_src, n):
         axes[5].imshow(image)
         axes[5].axis('off')
         axes[5].set_title(f"Actual Image {j}")
+
+        plt.suptitle(f"Top {k} Influences for Image {j}: {inf_src}")
 
         # Adjust layout and display the plot
         plt.tight_layout()
@@ -81,4 +83,4 @@ if __name__ == '__main__':
     # plot_top_influences(os.getcwd() + '/results/top_influences.txt', 5)
     # plot_top_influences(os.getcwd() + '/results/top_influences_lissa.txt', 5)
     influence_correlation(os.getcwd() + '/results/lissa_influences.txt', os.getcwd() + '/results/kfac_influences_Linear(in_features=784, out_features=256, bias=True).txt')
-    plot_top_influences(os.getcwd() + '/results/top_influences.txt', 8)
+    plot_top_influences(os.getcwd() + '/results/kfac_top_influences.txt', 10)

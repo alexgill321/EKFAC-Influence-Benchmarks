@@ -29,7 +29,7 @@ def main():
     if not os.path.exists(os.getcwd() + '/results'):
         os.mkdir(os.getcwd() + '/results')
 
-    k = 5
+    k = 10
     with open(os.getcwd() + '/results/ekfac_top_influences.txt', 'w') as file:
         for layer in influences:
             file.write(f'{layer}\n')

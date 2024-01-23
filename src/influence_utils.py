@@ -137,7 +137,8 @@ class EKFACInfluence(DataInfluence):
             **kwargs: Any additional arguments that are necessary for specific implementations of the
                 'DataInfluence' abstract class.
         """
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cpu"
         self.module = module.to(self.device)
         self.layers = [layers] if isinstance(layers, str) else layers
         self.influence_src_dataset = influence_src_dataset
@@ -252,7 +253,7 @@ class EKFACInfluence(DataInfluence):
                     grads = layer.weight.grad
 
                 # Computing the ihvp for the current example
-                ihvp = self.ihvp(grads, Qa, Qs, eigenval_diag, eps)
+                ihvp = self.ihvp_mod(grads, Qa, Qs, eigenval_diag, eps)
                 query_grads[layer].append(ihvp)
 
         for layer in layer_modules:
@@ -294,7 +295,7 @@ class EKFACInfluence(DataInfluence):
                     else:
                         influence_dict[layer].append(torch.tensor(influences))
 
-        return influences
+        return influence_dict
 
     def kfac_influence(
             self,
