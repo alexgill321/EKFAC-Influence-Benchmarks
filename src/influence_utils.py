@@ -66,6 +66,30 @@ class EKFAC(Optimizer):
             # Calculate the covariance matrices and add them to the sums.
             self.calc_A(group, x)
             self.calc_S(group, gy)
+
+    def kfac_diag(self, G_list, kfac_diags):
+        for group in self.param_groups:
+            mod = group['mod']
+
+            Qa = G_list[mod]['Qa']
+            Qs = G_list[mod]['Qs']
+
+            x = self.state[mod]['x']
+            gy = self.state[mod]['gy']
+
+            if mod.bias is not None:
+                x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+
+            gy_kfe = torch.mm(gy, Qs)
+            x_kfe = torch.mm(x, Qa)
+            kfac_diag = (torch.mm(gy_kfe.t() ** 2, x_kfe**2).view(-1))
+
+            if mod not in kfac_diags:
+                kfac_diags[mod] = kfac_diag
+            else:
+                kfac_diags[mod].add_(kfac_diag)
+
+        return kfac_diags
             
     def calc_A(self, group, x):
         """ Calculates and updates the value of 'A' in the given group.
@@ -97,6 +121,8 @@ class EKFAC(Optimizer):
             else:
                 torch.add(group['S'], torch.matmul(gy, gy.t())/float(gy.shape[1]), out=group['S'])
                 group['S_count'] += 1
+
+
 
     def _save_input(self, mod, i):
         """Saves input of layer to compute covariance."""
@@ -202,7 +228,6 @@ class EKFACInfluence(DataInfluence):
         # Setting the loss to be NLL as we want to find training sequences that most influence the
         # probability of generating a completion distribution given a prompt. See eq. 24.
         criterion = torch.nn.CrossEntropyLoss()
-        print(f'Cacultating query gradients on trained model')
         for layer in layer_modules:
             query_grads[layer] = []
             influence_src_grads[layer] = []
@@ -219,7 +244,7 @@ class EKFACInfluence(DataInfluence):
         # original_label_to_dataset_labels_mapping_l1 = {}
 
         # Computing the ihvp for each example in the dataset
-        for _, (inputs, targets) in tqdm.tqdm(enumerate(query_dataloader), total=len(query_dataloader)):
+        for _, (inputs, targets) in tqdm.tqdm(enumerate(query_dataloader), total=len(query_dataloader), desc="Calculating IHVPs"):
             self.module.zero_grad()
             inputs = inputs.to(self.device)
             targets = targets.to(self.device)
@@ -242,7 +267,7 @@ class EKFACInfluence(DataInfluence):
                 # (not capturing the true variance of the pseudogradients). However, this should just make
                 # the GNH approximation less accurate, and I don't believe it should be causing the
                 # calculation itself to fail.
-                eigenval_diag = G_list[layer]['lambda']
+                kfac_diag = G_list[layer]['kfac_diag']
                 if layer.bias is not None:
                     grad_bias = layer.bias.grad
                     grad_weights = layer.weight.grad
@@ -252,7 +277,7 @@ class EKFACInfluence(DataInfluence):
                     grads = layer.weight.grad
 
                 # Computing the ihvp for the current example
-                ihvp = self.ihvp_mod(grads, Qa, Qs, eigenval_diag, eps)
+                ihvp = self.ihvp_mod(grads, Qa, Qs, kfac_diag, eps)
                 query_grads[layer].append(ihvp)
 
         for layer in layer_modules:
@@ -262,8 +287,11 @@ class EKFACInfluence(DataInfluence):
 
         # Setting the loss to be CrossEntropy as we want the autoregressive crossentropy of the models output distribution
         criterion = torch.nn.CrossEntropyLoss(reduction='none')
-        print(f'Cacultating training src gradients on trained model')
-        for i, (inputs, targets) in tqdm.tqdm(enumerate(self.influence_src_dataloader), total=len(self.influence_src_dataloader)):
+        for i, (inputs, targets) in tqdm.tqdm(
+            enumerate(self.influence_src_dataloader), 
+            total=len(self.influence_src_dataloader),
+            desc="Calculating Training Grads"):
+
             self.module.zero_grad()
             inputs = inputs.to(self.device)
             targets = targets.to(self.device)
@@ -441,7 +469,7 @@ class EKFACInfluence(DataInfluence):
             grads: List[Tensor],
             Qa: Tensor,
             Qs: Tensor,
-            eigenval_diag: Tensor,
+            kfac_diag: Tensor,
             eps: float = 1e-8,
     ) -> Tensor:
         """ Computes the inverse hessian vector product using the eigenvalue decomposition
@@ -460,7 +488,7 @@ class EKFACInfluence(DataInfluence):
         """
 
         v_kfe = torch.mm(torch.mm(Qs.t(), grads), Qa)
-        inv_kfe = v_kfe / (eigenval_diag.view(*v_kfe.size()) + eps) 
+        inv_kfe = v_kfe / (kfac_diag.view(*v_kfe.size()) + eps) 
         inv = torch.mm(torch.mm(Qs, inv_kfe), Qa.t())
         ihvp = torch.flatten(inv)
 
@@ -472,7 +500,12 @@ class EKFACInfluence(DataInfluence):
     def _compute_EKFAC_params(self, n_samples: int = 2):
         ekfac = EKFAC(self.module)
         loss_fn = torch.nn.CrossEntropyLoss()
-        for _, (input, _) in tqdm.tqdm(enumerate(self.cov_src_dataloader), total=len(self.cov_src_dataloader)):
+        for _, (input, _) in tqdm.tqdm(
+            enumerate(self.cov_src_dataloader), 
+            total=len(self.cov_src_dataloader), 
+            desc="Calculating Covariances"
+            ):
+            
             input = input.to(self.device)
             outputs = self.module(input)
               
@@ -514,10 +547,35 @@ class EKFACInfluence(DataInfluence):
             G_list[group['mod']]['A'] = cov_a
             G_list[group['mod']]['S'] = cov_s
 
-            icov_a = (cov_a + 1e-1*torch.eye(cov_a.shape[0]).to(self.device)).inverse()
-            icov_s = (cov_s + 1e-1*torch.eye(cov_s.shape[0]).to(self.device)).inverse()
-            G_list[group['mod']]['inv_A'] = icov_a
-            G_list[group['mod']]['inv_S'] = icov_s
+            G_list[group['mod']]['inv_A'] = (cov_a + 1e-1*torch.eye(cov_a.shape[0]).to(self.device)).inverse()
+            G_list[group['mod']]['inv_S'] = (cov_s + 1e-1*torch.eye(cov_s.shape[0]).to(self.device)).inverse()
+        
+        kfac_diags = {}
+        for _, (input, _) in tqdm.tqdm(
+            enumerate(self.cov_src_dataloader), 
+            total=len(self.cov_src_dataloader), 
+            desc="Computing KFAC Diags"
+            ):
+
+            input = input.to(self.device)
+            outputs = self.module(input)
+
+            output_probs = torch.softmax(outputs, dim=-1)
+
+            # This is sampling from the output distribution as described in the paper
+            samples = torch.multinomial(output_probs, n_samples, replacement=True).squeeze()
+            for sample in samples:
+                loss = loss_fn(outputs, torch.unsqueeze(sample, dim=0))
+                loss.backward(retain_graph=True)
+
+                kfac_diags = ekfac.kfac_diag(G_list, kfac_diags)
+                      
+                self.module.zero_grad()
+                ekfac.zero_grad()
+        
+        for group in ekfac.param_groups:
+            kfac_diags[group['mod']] = kfac_diags[group['mod']] / float(group['S_count'])
+            G_list[group['mod']]['kfac_diag'] = kfac_diags[group['mod']].to(self.device)
             
         return G_list
 

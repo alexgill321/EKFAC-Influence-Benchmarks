@@ -1,4 +1,5 @@
 #%%
+from matplotlib import patches
 from torchvision import datasets
 from torch.utils.data import Subset
 import os
@@ -7,7 +8,7 @@ import matplotlib.pyplot as plt
 import torch
 
 
-def plot_top_influences(inf_src, n, k=5):
+def plot_top_influences(inf_src, n, k=5, label=None):
 
     train_dataset = datasets.MNIST(root='../data', train=True, download=True)
     
@@ -22,29 +23,36 @@ def plot_top_influences(inf_src, n, k=5):
                 if len(splits) != 2:
                     continue
                 try:
-                    list = ast.literal_eval(splits[1])
-                    array_list.append(list)
+                    lst = ast.literal_eval(splits[1])
+                    array_list.append(lst)
                 except ValueError as e:
                     continue
             else:
                 continue
 
-    for j, list in enumerate(array_list):
+    for j, lst in enumerate(array_list):
         fig, axes = plt.subplots(1, 6, figsize=(15, 3)) 
         # Iterate over image paths and axes to plot each image
-        for i, (index, ax) in enumerate(zip(list, axes[:k])):
+        for i, (index, ax) in enumerate(zip(lst, axes[1:k+1])):
             image = train_dataset[index][0]  # Load the image
             # Display the image on the current axis
             ax.imshow(image)
             ax.axis('off')  # Turn off axis labels
-            ax.set_title(f"Image {index}")
+            ax.set_title(f"Influence #{i+1}: IMG {index}")
         
         image = train_dataset[j][0]
-        axes[5].imshow(image)
-        axes[5].axis('off')
-        axes[5].set_title(f"Actual Image {j}")
+        axes[0].imshow(image)
+        
+        # Add a border to axes[0]
+        axes[0].add_patch(patches.Rectangle((0, 0), 27, 27, linewidth=2, edgecolor='r', facecolor='none'))
+        
+        axes[0].axis('off')
+        axes[0].set_title(f"Test Image", fontweight='bold')
 
-        plt.suptitle(f"Top {k} Influences for Image {j}: {inf_src}")
+        if label:
+            plt.suptitle(f"Top {k} Influences for Image {j}: {label}")
+        else:
+            plt.suptitle(f"Top {k} Influences for Image {j}")
 
         # Adjust layout and display the plot
         plt.tight_layout()
@@ -82,6 +90,9 @@ if __name__ == '__main__':
     # Replace with the path to your top_influences.txt file
     # plot_top_influences(os.getcwd() + '/results/top_influences.txt', 5)
     # plot_top_influences(os.getcwd() + '/results/top_influences_lissa.txt', 5)
-    influence_correlation(os.getcwd() + '/results/lissa_influences.txt', os.getcwd() + '/results/ekfac_influences_Linear(in_features=784, out_features=256, bias=True).txt')
-    influence_correlation(os.getcwd() + '/results/lissa_influences.txt', os.getcwd() + '/results/kfac_influences_Linear(in_features=784, out_features=256, bias=True).txt')
-    plot_top_influences(os.getcwd() + '/results/ekfac_top_influences.txt', 10)
+    lissa_influences = os.getcwd() + '/results/lissa_influences.txt'
+    kfac_influences = os.getcwd() + '/results/kfac_influences_Linear(in_features=784, out_features=256, bias=True).txt'
+    ekfac_influences = os.getcwd() + '/results/ekfac_influences_Linear(in_features=784, out_features=256, bias=True).txt'
+    influence_correlation(lissa_influences, kfac_influences)
+    influence_correlation(lissa_influences, ekfac_influences)
+    plot_top_influences(os.getcwd() + '/results/ekfac_top_influences.txt', 10, label='EKFAC')
