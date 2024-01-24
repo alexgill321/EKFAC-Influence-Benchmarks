@@ -16,8 +16,7 @@ import tqdm
 import torch.nn as nn
 
 class EKFAC(Optimizer):
-    def __init__(self, net, eps):
-        self.eps = eps
+    def __init__(self, net):
         self.params = []
         self._fwd_handles = []
         self._bwd_handles = []
@@ -281,19 +280,19 @@ class EKFACInfluence(DataInfluence):
                         grads = torch.cat([grad_weights, grad_bias], dim=1)
                     else:
                         grads = layer.weight.grad
-                    influence_src_grads[layer].append(torch.flatten(grads))
+                    influence_src_grads[layer].append(grads.flatten())
 
-            # Calculate influences by batch to save memory
-            influence_dict = {}
-            for layer in layer_modules:
-                for ihvp in query_grads[layer]:
-                    influences = []
-                    for grad in influence_src_grads[layer]:
-                        influences.append((grad @ ihvp).item())
-                    if layer not in influence_dict:
-                        influence_dict[layer] = [torch.tensor(influences)]
-                    else:
-                        influence_dict[layer].append(torch.tensor(influences))
+        # Calculate influences by batch to save memory
+        influence_dict = {}
+        for layer in layer_modules:
+            for ihvp in query_grads[layer]:
+                influences = []
+                for grad in influence_src_grads[layer]:
+                    influences.append((grad @ ihvp).item())
+                if layer not in influence_dict:
+                    influence_dict[layer] = [torch.tensor(influences)]
+                else:
+                    influence_dict[layer].append(torch.tensor(influences))
 
         return influence_dict
 
@@ -443,7 +442,7 @@ class EKFACInfluence(DataInfluence):
             Qa: Tensor,
             Qs: Tensor,
             eigenval_diag: Tensor,
-            eps: float = 1e-5,
+            eps: float = 1e-8,
     ) -> Tensor:
         """ Computes the inverse hessian vector product using the eigenvalue decomposition
         of the covariance matrices A and S. This is modified from the original paper, as it seems
@@ -459,14 +458,11 @@ class EKFACInfluence(DataInfluence):
 
         Returns: Inverse Hessian Vector Product of the gradients and the approximated hessian.
         """
-        t_Qa = torch.t(Qa)
-        t_Qs = torch.t(Qs)
 
-        inner_num = torch.matmul(Qs, torch.matmul(grads, t_Qa))
-        inv_diag = 1/(eigenval_diag + eps)
-        inner_prod = torch.div(inner_num, inv_diag)
-        outer_prod = torch.matmul(t_Qs, torch.matmul(inner_prod, Qa))
-        ihvp = torch.flatten(outer_prod)
+        v_kfe = torch.mm(torch.mm(Qs.t(), grads), Qa)
+        inv_kfe = v_kfe / (eigenval_diag.view(*v_kfe.size()) + eps) 
+        inv = torch.mm(torch.mm(Qs, inv_kfe), Qa.t())
+        ihvp = torch.flatten(inv)
 
         return ihvp
 
@@ -474,12 +470,12 @@ class EKFACInfluence(DataInfluence):
         pass 
 
     def _compute_EKFAC_params(self, n_samples: int = 2):
-        ekfac = EKFAC(self.module, 1e-5)
-        loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
+        ekfac = EKFAC(self.module)
+        loss_fn = torch.nn.CrossEntropyLoss()
         for _, (input, _) in tqdm.tqdm(enumerate(self.cov_src_dataloader), total=len(self.cov_src_dataloader)):
             input = input.to(self.device)
             outputs = self.module(input)
-            
+              
             # Activations for an input should only be added once
             ekfac.calc_act = True
             output_probs = torch.softmax(outputs, dim=-1)
@@ -504,9 +500,10 @@ class EKFACInfluence(DataInfluence):
                 cov_s = (group['S']/float(group['S_count'])).to(self.device)
 
                 # Compute eigenvalues and eigenvectors of A and S
-                la, Qa = torch.linalg.eigh(cov_a, UPLO='U')
-                ls, Qs = torch.linalg.eigh(cov_s, UPLO='U')
-                eigenval_diags = torch.outer(la, ls).t()
+                la, Qa = torch.linalg.eigh(cov_a)
+                ls, Qs = torch.linalg.eigh(cov_s)
+                
+                eigenval_diags = kronecker(la.view(-1,1), ls.view(-1,1))
 
             # For each layer, store A, S, A_inv, S_inv, Qa, Qs, lambda
             G_list[group['mod']]['Qa'] = Qa.to(self.device)
@@ -617,4 +614,12 @@ class ComputeCovG:
             cov_g = g.t() @ (g / batch_size)
         return cov_g
     
+def kronecker(A, B):
+    sA = A.size()
+    sB = B.size()
+    return (
+        (A.view(sA[0], 1, sA[1], 1) * B.view(1, sB[0], 1, sB[1]))
+        .contiguous()
+        .view(sA[0] * sB[0], sA[1] * sB[1])
+    )
    

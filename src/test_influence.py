@@ -23,9 +23,8 @@ def main():
     test_dataset = Subset(train_dataset, range(10))
     
     influence_model = EKFACInfluence(model, layers=['fc1', 'fc2'], influence_src_dataset=train_dataset, batch_size=1, cov_batch_size=1)
-    influences = influence_model.influence(test_dataset)
+    influences = influence_model.influence(test_dataset, eps=1e-5)
     
-
     if not os.path.exists(os.getcwd() + '/results'):
         os.mkdir(os.getcwd() + '/results')
 

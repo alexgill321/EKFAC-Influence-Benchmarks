@@ -74,7 +74,7 @@ def influence_correlation(inf_src1, inf_src2):
         inf_2 = torch.tensor(j)
         inf_stacked = torch.stack([inf_1, inf_2], dim=0)
         corr_list.append(torch.corrcoef(inf_stacked)[0, 1].item())
-    print(f'Average Correlation: {sum(corr_list) / len(corr_list)}')
+    print(f'Average Correlation for {inf_src1} and {inf_src2}: {sum(corr_list) / len(corr_list)}')
 
     
 
@@ -82,5 +82,6 @@ if __name__ == '__main__':
     # Replace with the path to your top_influences.txt file
     # plot_top_influences(os.getcwd() + '/results/top_influences.txt', 5)
     # plot_top_influences(os.getcwd() + '/results/top_influences_lissa.txt', 5)
+    influence_correlation(os.getcwd() + '/results/lissa_influences.txt', os.getcwd() + '/results/ekfac_influences_Linear(in_features=784, out_features=256, bias=True).txt')
     influence_correlation(os.getcwd() + '/results/lissa_influences.txt', os.getcwd() + '/results/kfac_influences_Linear(in_features=784, out_features=256, bias=True).txt')
-    plot_top_influences(os.getcwd() + '/results/kfac_top_influences.txt', 10)
+    plot_top_influences(os.getcwd() + '/results/ekfac_top_influences.txt', 10)

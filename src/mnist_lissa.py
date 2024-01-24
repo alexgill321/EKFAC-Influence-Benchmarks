@@ -1,4 +1,4 @@
-from torch_influence import BaseObjective, LiSSAInfluenceModule, CGInfluenceModule
+from torch_influence import BaseObjective, LiSSAInfluenceModule, CGInfluenceModule, AutogradInfluenceModule
 from torchvision import datasets, transforms
 import torch
 from linear_nn import get_model, load_model
@@ -6,7 +6,7 @@ from torch.utils.data import Subset, DataLoader, Dataset
 import os
 from tqdm import tqdm
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = "cpu"
 L2_WEIGHT = 1e-4
 
 def main():
@@ -54,18 +54,28 @@ def main():
     train_dataloader = DataLoader(train_dataset_sub, batch_size=2)
     test_dataloader = DataLoader(test_dataset_sub, batch_size=2)
         
-    module = LiSSAInfluenceModule(
-        model = model,
-        objective = ClassObjective(),
-        train_loader = train_dataloader,
-        test_loader = test_dataloader,
+    # module = LiSSAInfluenceModule(
+    #     model = model,
+    #     objective = ClassObjective(),
+    #     train_loader = train_dataloader,
+    #     test_loader = test_dataloader,
+    #     device=DEVICE,
+    #     damp=1e-4,
+    #     repeat=10,
+    #     depth=1000,
+    #     scale=100,
+    #     gnh=True
+    # )
+
+    module = AutogradInfluenceModule(
+        model=model,
+        objective=ClassObjective(),  
+        train_loader=train_dataloader,
+        test_loader=test_dataloader,
         device=DEVICE,
-        damp=1e-4,
-        repeat=10,
-        depth=1000,
-        scale=100,
-        gnh=True
+        damp=0.001
     )
+
 
     cg_module = CGInfluenceModule(
         model = model,
@@ -84,7 +94,7 @@ def main():
     ihvps = []
     for test_idx in tqdm(test_idxs, desc='Computing Influences'):
         influences.append(module.influences(train_idxs, [test_idx]))
-        ihvp = module.stest([test_idx])
+        # ihvp = module.stest([test_idx])
         ihvp_reshaped = module._reshape_like_params(ihvp)
         ihvp_l1 = torch.cat((ihvp_reshaped[0], ihvp_reshaped[1].reshape(-1,1)), dim=1)
         ihvps.append(ihvp_l1.flatten())
