@@ -82,7 +82,7 @@ class EKFAC(Optimizer):
 
             gy_kfe = torch.mm(gy, Qs)
             x_kfe = torch.mm(x, Qa)
-            kfac_diag = (torch.mm(gy_kfe.t() ** 2, x_kfe**2).view(-1))
+            kfac_diag = (torch.mm(gy_kfe.t() ** 2, x_kfe ** 2).view(-1))
 
             if mod not in kfac_diags:
                 kfac_diags[mod] = kfac_diag
@@ -505,7 +505,7 @@ class EKFACInfluence(DataInfluence):
             total=len(self.cov_src_dataloader), 
             desc="Calculating Covariances"
             ):
-            
+
             input = input.to(self.device)
             outputs = self.module(input)
               
