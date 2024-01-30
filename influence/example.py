@@ -19,7 +19,7 @@ class MNISTObjective(BaseObjective):
         criterion = torch.nn.CrossEntropyLoss()
         return criterion(outputs, batch[1].to(DEVICE))
 
-    def test_loss(self, model, params, batch):
+    def test_loss(self, model, batch):
         outputs = model(batch[0].to(DEVICE))
         criterion = torch.nn.CrossEntropyLoss()
         return criterion(outputs, batch[1].to(DEVICE))
@@ -50,10 +50,26 @@ def main():
         train_loader=train_dataloader,
         test_loader=test_dataloader,
         device=DEVICE,
-        damp=1e-4
+        damp=1e-4,
+        n_samples=2
     )
 
-    module.influences(train_idxs, test_idxs)
+    influences = module.influences(train_idxs, test_idxs)
+    
+    for layer in influences:
+        with open(os.getcwd() + f'/results/refac_kfac_influences_{layer}.txt', 'w') as file:
+            for i, influence in enumerate(influences[layer]):
+                file.write(f'{i}: {influence.tolist()}\n')
+        file.close()
+    
+    k = 10
+    with open(os.getcwd() + '/results/refac_ekfac_top_influences.txt', 'w') as file:
+        for layer in influences:
+            file.write(f'{layer}\n')
+            for i, influence in enumerate(influences[layer]):
+                top = torch.topk(influence, k=k).indices
+                file.write(f'Sample {i}  Top {k} Influence Indexes: {[val for val in top.tolist()]}\n')
+
 
 if __name__ == '__main__':
     main()
