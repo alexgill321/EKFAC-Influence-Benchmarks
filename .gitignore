@@ -7,3 +7,4 @@ Include/
 etc/
 .vscode/
 *.cfg
+\results

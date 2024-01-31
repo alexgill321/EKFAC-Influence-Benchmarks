@@ -62,7 +62,7 @@ def main():
         file.close()
     
     k = 10
-    with open(os.getcwd() + '/results/refac_ekfac_top_influences.txt', 'w') as file:
+    with open(os.getcwd() + '/results/refac_kfac_top_influences.txt', 'w') as file:
         for layer in influences:
             file.write(f'{layer}\n')
             for i, influence in enumerate(influences[layer]):
