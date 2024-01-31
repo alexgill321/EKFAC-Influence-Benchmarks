@@ -35,12 +35,11 @@ def main():
     ])
 
     train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
-    train_subset = Subset(train_dataset, range(2000))
-    test_subset = Subset(train_dataset, range(100))
+    test_subset = Subset(train_dataset, range(1000))
 
-    train_idxs = list(range(0, 1000))
-    test_idxs = list(range(0, 10))
-    train_dataloader = DataLoader(train_subset, batch_size=32)
+    train_idxs = list(range(0, len(train_dataset)))
+    test_idxs = list(range(0, 100))
+    train_dataloader = DataLoader(train_dataset, batch_size=32)
     test_dataloader = DataLoader(test_subset, batch_size=2)
 
     module = KFACInfluenceModule(
@@ -50,7 +49,7 @@ def main():
         train_loader=train_dataloader,
         test_loader=test_dataloader,
         device=DEVICE,
-        damp=1e-4,
+        damp=1e-2,
         n_samples=2
     )
 
