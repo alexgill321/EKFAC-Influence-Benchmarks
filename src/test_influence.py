@@ -11,6 +11,9 @@ import matplotlib.pyplot as plt
 def main():
     net, _, _ = get_model()
     model = load_model(net, os.getcwd() + '/models/linear_trained_model.pth')
+
+    torch.manual_seed(42)
+    
     transform = transforms.Compose([
         transforms.ToTensor(), 
         transforms.Normalize((0.5,), (0.5,)), 
@@ -20,10 +23,10 @@ def main():
     # Download MNIST dataset and create DataLoader
     train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
     train_dataset = Subset(train_dataset, range(1000))
-    test_dataset = Subset(train_dataset, range(10))
+    test_dataset = Subset(train_dataset, range(100))
     
     influence_model = EKFACInfluence(model, layers=['fc1', 'fc2'], influence_src_dataset=train_dataset, batch_size=1, cov_batch_size=1)
-    influences = influence_model.kfac_influence(test_dataset, eps=1e-7)
+    influences = influence_model.influence(test_dataset, eps=1e-4)
     
     if not os.path.exists(os.getcwd() + '/results'):
         os.mkdir(os.getcwd() + '/results')

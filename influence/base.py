@@ -200,7 +200,10 @@ class BaseInfluenceModule(abc.ABC):
     def _loss_pseudograd(self, batch, n_samples=1):
         outputs = self.objective.train_outputs(self.model, batch)
         output_probs = torch.softmax(outputs, dim=-1)
-        samples = torch.multinomial(output_probs, num_samples=n_samples, replacement=True)
+        # Create a torch generator
+        generator = torch.Generator(device=self.device)
+        generator.manual_seed(42)
+        samples = torch.multinomial(output_probs, num_samples=n_samples, replacement=True, generator=generator)
         for s in samples.t():
             inputs = batch[0].clone()
             sampled_batch = [inputs, s]
@@ -340,14 +343,14 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
     
     def _calc_covs(self, layer, x, gy):
         if 'acov' not in self.state[layer]:
-            self.state[layer]['acov'] = x.mm(x.t()) / x.size(1)
+            self.state[layer]['acov'] = x.mm(x.t()) / x.shape[1]
         else:
-            self.state[layer]['acov'].addmm_(x / x.size(1), x.t())
+            self.state[layer]['acov'].addmm_(x / x.shape[1], x.t())
 
-        if 'gycov' not in self.state[layer]:
-            self.state[layer]['scov'] = gy.mm(gy.t()) / gy.size(1)
+        if 'scov' not in self.state[layer]:
+            self.state[layer]['scov'] = gy.mm(gy.t()) / gy.shape[1]
         else:
-            self.state[layer]['scov'].addmm_(gy / gy.size(1), gy.t())
+            self.state[layer]['scov'].addmm_(gy / gy.shape[1], gy.t())
 
     def _save_input(self, layer, inp):
         self.state[layer]['x'] = inp[0]
