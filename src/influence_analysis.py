@@ -93,6 +93,9 @@ if __name__ == '__main__':
     lissa_influences = os.getcwd() + '/results/lissa_influences.txt'
     kfac_influences = os.getcwd() + '/results/kfac_influences_Linear(in_features=784, out_features=256, bias=True).txt'
     ekfac_influences = os.getcwd() + '/results/ekfac_influences_Linear(in_features=784, out_features=256, bias=True).txt'
-    influence_correlation(lissa_influences, kfac_influences)
-    influence_correlation(lissa_influences, ekfac_influences)
-    plot_top_influences(os.getcwd() + '/results/ekfac_top_influences.txt', 10, label='EKFAC')
+    refac_kfac_influences = os.getcwd() + '/results/refac_kfac_influences_fc1.txt'
+    refac_ekfac_influences = os.getcwd() + '/results/refac_ekfac_influences_fc1.txt'
+    influence_correlation(ekfac_influences, refac_ekfac_influences)
+    # influence_correlation(lissa_influences, ekfac_influences)
+    # influence_correlation(lissa_influences, refac_kfac_influences)
+    plot_top_influences(os.getcwd() + '/results/refac_ekfac_top_influences.txt', 10, label='REKFAC')

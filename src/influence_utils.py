@@ -82,7 +82,7 @@ class EKFAC(Optimizer):
 
             gy_kfe = torch.mm(gy, Qs)
             x_kfe = torch.mm(x, Qa)
-            kfac_diag = (torch.mm(gy_kfe.t() ** 2, x_kfe**2).view(-1))
+            kfac_diag = (torch.mm(gy_kfe.t() ** 2, x_kfe ** 2).view(-1))
 
             if mod not in kfac_diags:
                 kfac_diags[mod] = kfac_diag
@@ -162,8 +162,7 @@ class EKFACInfluence(DataInfluence):
             **kwargs: Any additional arguments that are necessary for specific implementations of the
                 'DataInfluence' abstract class.
         """
-        # self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.device = "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.module = module.to(self.device)
         self.layers = [layers] if isinstance(layers, str) else layers
         self.influence_src_dataset = influence_src_dataset
@@ -177,7 +176,7 @@ class EKFACInfluence(DataInfluence):
         # Creating dataloaders for the covariance source dataset
         # This batch size must be 1 for now as the gradient with batch size > 1 is not supported yet.
         self.cov_src_dataloader = DataLoader(
-            self.influence_src_dataset, batch_size=cov_batch_size, shuffle=True
+            self.influence_src_dataset, batch_size=cov_batch_size, shuffle=False
         )
     
     def influence(
@@ -505,7 +504,7 @@ class EKFACInfluence(DataInfluence):
             total=len(self.cov_src_dataloader), 
             desc="Calculating Covariances"
             ):
-            
+
             input = input.to(self.device)
             outputs = self.module(input)
               
@@ -514,7 +513,10 @@ class EKFACInfluence(DataInfluence):
             output_probs = torch.softmax(outputs, dim=-1)
 
             # This is sampling from the output distribution as described in the paper
-            samples = torch.multinomial(output_probs, n_samples, replacement=True).squeeze()
+            # Create a torch generator
+            generator = torch.Generator(device=self.device)
+            generator.manual_seed(42)
+            samples = torch.multinomial(output_probs, n_samples, replacement=True, generator=generator).squeeze()
             for sample in samples:
                 loss = loss_fn(outputs, torch.unsqueeze(sample, dim=0))
                 loss.backward(retain_graph=True)
@@ -529,8 +531,8 @@ class EKFACInfluence(DataInfluence):
             G_list[group['mod']] = {}
             with autocast():
                 # Compute average A and S values
-                cov_a = (group['A']/float(group['A_count'])).to(self.device)
-                cov_s = (group['S']/float(group['S_count'])).to(self.device)
+                cov_a = (group['A']/group['A_count']).to(self.device)
+                cov_s = (group['S']/group['S_count']).to(self.device)
 
                 # Compute eigenvalues and eigenvectors of A and S
                 la, Qa = torch.linalg.eigh(cov_a)
