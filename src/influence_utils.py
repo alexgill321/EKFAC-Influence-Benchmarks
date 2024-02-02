@@ -260,12 +260,6 @@ class EKFACInfluence(DataInfluence):
                 Qa = G_list[layer]['Qa']
                 Qs = G_list[layer]['Qs']
 
-                # Eigenvalue diagonal is also calculated in _compute_EKFAC_params() function. Although
-                # right now it is not calculated using the exact pseudogradients as in eq. 20 in the paper.
-                # This means the diagonal entries of the approximated kroneker eigenbasis will be biased,
-                # (not capturing the true variance of the pseudogradients). However, this should just make
-                # the GNH approximation less accurate, and I don't believe it should be causing the
-                # calculation itself to fail.
                 kfac_diag = G_list[layer]['kfac_diag']
                 if layer.bias is not None:
                     grad_bias = layer.bias.grad
@@ -499,6 +493,8 @@ class EKFACInfluence(DataInfluence):
     def _compute_EKFAC_params(self, n_samples: int = 2):
         ekfac = EKFAC(self.module)
         loss_fn = torch.nn.CrossEntropyLoss()
+        generator = torch.Generator(device=self.device)
+        generator.manual_seed(42)
         for _, (input, _) in tqdm.tqdm(
             enumerate(self.cov_src_dataloader), 
             total=len(self.cov_src_dataloader), 
@@ -514,8 +510,6 @@ class EKFACInfluence(DataInfluence):
 
             # This is sampling from the output distribution as described in the paper
             # Create a torch generator
-            generator = torch.Generator(device=self.device)
-            generator.manual_seed(42)
             samples = torch.multinomial(output_probs, n_samples, replacement=True, generator=generator).squeeze()
             for sample in samples:
                 loss = loss_fn(outputs, torch.unsqueeze(sample, dim=0))
@@ -565,7 +559,7 @@ class EKFACInfluence(DataInfluence):
             output_probs = torch.softmax(outputs, dim=-1)
 
             # This is sampling from the output distribution as described in the paper
-            samples = torch.multinomial(output_probs, n_samples, replacement=True).squeeze()
+            samples = torch.multinomial(output_probs, n_samples, replacement=True, generator=generator).squeeze()
             for sample in samples:
                 loss = loss_fn(outputs, torch.unsqueeze(sample, dim=0))
                 loss.backward(retain_graph=True)

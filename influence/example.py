@@ -38,12 +38,12 @@ def main():
     ])
 
     train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
-    train_subset = Subset(train_dataset, range(1000))
+    train_subset = Subset(train_dataset, range(5000))
     test_subset = Subset(train_dataset, range(100))
 
-    train_idxs = list(range(0, 1000))
+    train_idxs = list(range(0, 5000))
     test_idxs = list(range(0, 100))
-    train_dataloader = DataLoader(train_subset, batch_size=1, shuffle=False)
+    train_dataloader = DataLoader(train_subset, batch_size=32, shuffle=False)
     test_dataloader = DataLoader(test_subset, batch_size=2, shuffle=False)
 
     module = EKFACInfluenceModule(
@@ -53,7 +53,7 @@ def main():
         train_loader=train_dataloader,
         test_loader=test_dataloader,
         device=DEVICE,
-        damp=1e-4,
+        damp=1e-7,
         n_samples=2
     )
 
