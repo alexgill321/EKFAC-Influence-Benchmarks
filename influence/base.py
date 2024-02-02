@@ -197,12 +197,9 @@ class BaseInfluenceModule(abc.ABC):
             yield batch, size
             data_left -= size
 
-    def _loss_pseudograd(self, batch, n_samples=1):
+    def _loss_pseudograd(self, batch, n_samples=1, generator=None):
         outputs = self.objective.train_outputs(self.model, batch)
         output_probs = torch.softmax(outputs, dim=-1)
-        # Create a torch generator
-        generator = torch.Generator(device=self.device)
-        generator.manual_seed(42)
         samples = torch.multinomial(output_probs, num_samples=n_samples, replacement=True, generator=generator)
         for s in samples.t():
             inputs = batch[0].clone()
@@ -224,6 +221,7 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
             cov_loader: Optional[data.DataLoader] = None,
             n_samples: int = 1,
             damp: float = 1e-6,
+            seed: int = 42
     ):
         super().__init__(
             model=model,
@@ -245,6 +243,8 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
         ] 
 
         self.state = {layer: {} for layer in set(chain(self.layer_modules, self.layer_names))}
+        self.generator = torch.Generator(device=self.device)
+        self.generator.manual_seed(seed)
 
         if cov_loader is None:
             self.cov_loader = train_loader

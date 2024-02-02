@@ -64,7 +64,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
         cov_batched = tqdm.tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
 
         for batch in cov_batched:
-            loss = self._loss_pseudograd(batch, n_samples=self.n_samples)
+            loss = self._loss_pseudograd(batch, n_samples=self.n_samples, generator=self.generator)
             for l in loss:
                 l.backward(retain_graph=True)
                 self._update_covs()
@@ -87,7 +87,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
             )
         
         for batch in cov_batched:
-            loss = self._loss_pseudograd(batch, n_samples=self.n_samples)
+            loss = self._loss_pseudograd(batch, n_samples=self.n_samples, generator=self.generator)
             for l in loss:
                 l.backward(retain_graph=True)
                 self._update_diags()
