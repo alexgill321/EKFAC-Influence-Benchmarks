@@ -208,8 +208,86 @@ class BaseInfluenceModule(abc.ABC):
 
     def _get_module_from_name(self, model, layer_name) -> Any:
         return reduce(getattr, layer_name.split("."), model)
+    
+class BaseLayerInfluenceModule(BaseInfluenceModule):
+    def __init__(
+        self,
+        model: nn.Module,
+        objective: BaseInfluenceObjective,
+        train_loader: data.DataLoader,
+        test_loader: data.DataLoader,
+        device: torch.device,
+        layers: Union[str, List[str]]
+    ):
+        super().__init__(
+            model=model,
+            objective=objective,
+            train_loader=train_loader,
+            test_loader=test_loader,
+            device=device
+        )
+        
+        self._bwd_handles = []
+        self._fwd_handles = []
 
-class BaseKFACInfluenceModule(BaseInfluenceModule):
+        self.layer_names = layers
+        self.layer_modules = [
+            self._get_module_from_name(self.model, layer) for layer in layers
+        ]
+
+        self.state = {layer: {} for layer in set(chain(self.layer_modules, self.layer_names))}
+
+    @abc.abstractmethod
+    def inverse_hvp(self, vec):
+        raise NotImplementedError()
+
+    def influences(self,
+                   train_idxs: List[int],
+                   test_idxs: List[int]
+                   ) -> Tensor:
+        grads = self._loss_grads(train_idxs, train=True)
+        scores = {}
+
+        for grad in grads:
+            layer_grads = self._reshape_like_layers(grad)
+            for layer in self.layer_names:
+                layer_grad = layer_grads[layer].flatten()
+                if layer not in scores:
+                    scores[layer] = (layer_grad @ self.state[layer]['ihvp']).view(-1, 1)
+                else:
+                    scores[layer] = torch.cat([scores[layer], (layer_grad @ self.state[layer]['ihvp']).view(-1, 1)], dim=1)
+        
+        return scores
+
+    def _layer_hooks(self):
+        for layer in self.layer_modules:
+            handle = layer.register_forward_pre_hook(self._save_input)
+            self._fwd_handles.append(handle)
+            handle = layer.register_full_backward_hook(self._save_grad_output)
+            self._bwd_handles.append(handle)
+        
+    def _save_input(self, layer, inp):
+        self.state[layer]['x'] = inp[0]
+    
+    def _save_grad_output(self, layer, grad_input, grad_output):
+        self.state[layer]['gy'] = grad_output[0] * grad_output[0].size(0)
+
+    def _reshape_like_layers(self, vec):
+        grads = self._reshape_like_params(vec)
+
+        layer_grads = {}
+        for layer_name, layer in zip(self.layer_names, self.layer_modules):
+            if layer.__class__.__name__ == 'Linear':
+                layer_grad = grads[self.params_names.index(layer_name + '.weight')]
+                
+                if layer.bias is not None:
+                    layer_grad = torch.cat([layer_grad, grads[self.params_names.index(layer_name + '.bias')].view(-1, 1)], dim=1)
+
+                layer_grads[layer_name] = layer_grad
+        
+        return layer_grads
+
+class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
     def __init__(
             self,
             model: nn.Module,
@@ -229,20 +307,13 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
             train_loader=train_loader,
             test_loader=test_loader,
             device=device,
+            layers=layers
         )
 
         self.damp = damp
         self.n_samples = n_samples
         self.cov_loader = cov_loader
-        self._bwd_handles = []
-        self._fwd_handles = []
 
-        self.layer_names = layers
-        self.layer_modules = [
-            self._get_module_from_name(self.model, layer) for layer in layers
-        ] 
-
-        self.state = {layer: {} for layer in set(chain(self.layer_modules, self.layer_names))}
         self.generator = torch.Generator(device=self.device)
         self.generator.manual_seed(seed)
 
@@ -301,32 +372,6 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
                     ihvps[layer] = torch.cat([ihvps[layer], ihvp[layer].view(-1, 1)], dim=1)
         return ihvps
     
-
-    ### Helper Methods ###
-    def _layer_hooks(self):
-        for layer in self.layer_modules:
-            mod_class = layer.__class__.__name__
-            if mod_class in ['Linear']:
-                handle = layer.register_forward_pre_hook(self._save_input)
-                self._fwd_handles.append(handle)
-                handle = layer.register_full_backward_hook(self._save_grad_output)
-                self._bwd_handles.append(handle)
-
-    def _reshape_like_layers(self, vec):
-        grads = self._reshape_like_params(vec)
-
-        layer_grads = {}
-        for layer_name, layer in zip(self.layer_names, self.layer_modules):
-            if layer.__class__.__name__ == 'Linear':
-                layer_grad = grads[self.params_names.index(layer_name + '.weight')]
-                
-                if layer.bias is not None:
-                    layer_grad = torch.cat([layer_grad, grads[self.params_names.index(layer_name + '.bias')].view(-1, 1)], dim=1)
-
-                layer_grads[layer_name] = layer_grad
-        
-        return layer_grads
-    
     def _update_covs(self):
         for layer_name, layer in zip(self.layer_names, self.layer_modules):
             x = self.state[layer]['x']
@@ -351,10 +396,4 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
             self.state[layer]['scov'] = gy.mm(gy.t()) / gy.shape[1]
         else:
             self.state[layer]['scov'].addmm_(gy / gy.shape[1], gy.t())
-
-    def _save_input(self, layer, inp):
-        self.state[layer]['x'] = inp[0]
-    
-    def _save_grad_output(self, layer, grad_input, grad_output):
-        self.state[layer]['gy'] = grad_output[0] * grad_output[0].size(0)
 

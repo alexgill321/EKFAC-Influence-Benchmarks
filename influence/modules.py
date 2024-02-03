@@ -1,6 +1,9 @@
-from influence.base import BaseKFACInfluenceModule
+from influence.base import BaseKFACInfluenceModule, BaseInfluenceModule, BaseInfluenceObjective
 import torch
 import tqdm
+import torch.nn as nn
+from torch.utils import data
+
 
 import sys
 sys.path.append('c:\\Users\\alexg\\Documents\\GitHub\\EKFAC-Influence-Benchmarks')
@@ -113,4 +116,30 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
             else:
                 self.state[layer_name]['diag'].add_(diag)
             
+class PBRFInfluence(BaseKFACInfluenceModule):
+    def __init__(
+            self,
+            model: nn.Module,
+            objective: BaseInfluenceObjective,
+            train_loader: data.DataLoader,
+            test_loader: data.DataLoader,
+            device: torch.device,
+            damp: float,
+            check_eigvals: bool = False
+    ):
+        super().__init__(
+            model=model,
+            objective=objective,
+            train_loader=train_loader,
+            test_loader=test_loader,
+            device=device
+        )
+        self.damp = damp
+
+        hess = 0.0
+
+        for batch, batch_size in self._loader_wrapper(train=True):
+            hess_batch = torch.autograd.functional.hessian(
+                
+            )
 

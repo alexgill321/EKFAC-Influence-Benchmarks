@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from torch.nn import Module
 
-from torch_influence.base import BaseInfluenceModule, BaseObjective
+from torchinfluenceoriginal.torch_influence.base import BaseInfluenceModule, BaseObjective
 
 
 from distutils.version import LooseVersion
@@ -216,7 +216,7 @@ class IHVPInfluence(BaseInfluenceModule):
 
         with torch.no_grad():
             # self._model_reinsert_params(self._reshape_like_params(flat_params), register=True)
-            # hess = hess / len(self.train_loader.dataset)
+            hess = hess / len(self.train_loader.dataset)
             # hess = hess + damp * torch.eye(d, device=hess.device)
             # print(jac_model.fc2.weight.shape)
 
@@ -226,8 +226,7 @@ class IHVPInfluence(BaseInfluenceModule):
 
             # hess = torch.matmul(torch.matmul(torch.rand(2560), hess), torch.rand(2560))
 
-            hess = hess + damp* torch.eye(256*10, device=hess.device)
-
+            hess = hess + damp * torch.eye(256*10, device=hess.device)
 
             if check_eigvals:
                 eigvals = np.linalg.eigvalsh(hess.cpu().numpy())
@@ -242,9 +241,9 @@ class IHVPInfluence(BaseInfluenceModule):
 
 
     def inverse_hvp(self, vec):
-        print(self.inverse_hess.shape)
-        print(vec.shape)
-        exit()
+        # print(self.inverse_hess.shape)
+        # print(vec.shape)
+        # exit()
         return self.inverse_hess @ vec
 
 

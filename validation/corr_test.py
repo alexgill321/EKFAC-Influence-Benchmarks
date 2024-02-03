@@ -2,7 +2,7 @@ import os
 from torchvision import datasets, transforms
 import torch
 import sys
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torch_influence import BaseObjective, LiSSAInfluenceModule
 from tqdm import tqdm
 
@@ -10,6 +10,8 @@ sys.path.append('c:\\Users\\alexg\\Documents\\GitHub\\EKFAC-Influence-Benchmarks
 from src.linear_nn import get_model, load_model
 from influence.modules import EKFACInfluenceModule
 from influence.base import BaseInfluenceObjective
+from torchinfluenceoriginal.torch_influence.modules import IHVPInfluence
+
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 L2_WEIGHT = 1e-4
@@ -28,11 +30,12 @@ def main():
 
     train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
     test_dataset = datasets.MNIST(root='../data', train=False, transform=transform, download=True)
+    train_subset = Subset(train_dataset, range(1000))
 
-    random_train = torch.randperm(len(train_dataset), generator=generator)[:500]
+    random_train = torch.randperm(len(train_subset), generator=generator)[:500]
     random_test = torch.randperm(len(test_dataset), generator=generator)[:10]
 
-    train_dataloader = DataLoader(train_dataset, batch_size=32)
+    train_dataloader = DataLoader(train_subset, batch_size=32)
     test_dataloader = DataLoader(test_dataset, batch_size=32)
 
     if not os.path.exists(os.getcwd() + '/results/lissa_influences.txt'):
@@ -40,6 +43,9 @@ def main():
 
     if not os.path.exists(os.getcwd() + '/results/ekfac_refactored_influences_fc1.txt'):
         generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test)
+
+    if not os.path.exists(os.getcwd() + '/results/pbrf_influences.txt'):
+        generate_pbrf_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
 def generate_lissa_influences(model, train_dataloader, test_dataloader, random_train, random_test):
     # train_dataset_sub = CustomSubsetDataset(train_dataset, random_train)
@@ -122,6 +128,45 @@ def generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, ra
                 file.write(f'{test_idx}: {influence.tolist()}\n')
         file.close()
     
+def generate_pbrf_influences(model, train_dataloader, test_dataloader, random_train, random_test):
+    class ClassObjective(BaseObjective):
+        def train_outputs(self, model, batch):
+            return model(batch[0])
+
+        def train_loss_on_outputs(self, outputs, batch):
+            criterion = torch.nn.CrossEntropyLoss()
+            return criterion(outputs, batch[1])
+
+        def train_regularization(self, params):
+            return L2_WEIGHT * torch.square(params.norm())
+
+        def test_loss(self, model, params, batch):
+            outputs = model(batch[0])
+            criterion = torch.nn.CrossEntropyLoss()
+            return criterion(outputs, batch[1])
+        
+    module = IHVPInfluence(
+        model=model,
+        objective=ClassObjective(),
+        train_loader=train_dataloader,
+        test_loader=test_dataloader,
+        device=DEVICE,
+        damp=1e-5,
+        criterion = torch.nn.CrossEntropyLoss()
+    )
+
+    influences = []
+    for test_idx in tqdm(random_test, desc='Calcualting Influence'):
+        influences.append(module.influences(random_train, [test_idx]))
+
+    if not os.path.exists(os.getcwd() + '/results'):
+        os.mkdir(os.getcwd() + '/results')
+    
+    with open(os.getcwd() + f'/results/pbrf_influences.txt', 'w') as file:
+        for test_idx, influence in zip(random_test, influences):
+            file.write(f'{test_idx}: {influence.tolist()}\n')
+    file.close()
+
 if __name__ == '__main__':
     main()
 

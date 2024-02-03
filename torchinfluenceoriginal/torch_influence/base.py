@@ -215,9 +215,8 @@ class BaseInfluenceModule(abc.ABC):
         # exit()
 
 
-        print((self.test_loss_grad(test_idxs).shape))
-        print("test loss grad")
-        exit()
+        # print((self.test_loss_grad(test_idxs).shape))
+        # print("test loss grad")
         return self.inverse_hvp(self.test_loss_grad(test_idxs))
 
     def influences(
@@ -258,9 +257,8 @@ class BaseInfluenceModule(abc.ABC):
 
         scores = []
         for grad_z, _ in self._loss_grad_loader_wrapper(batch_size=1, subset=train_idxs, train=True):
-            print(grad_z.shape)
-            print(stest.shape)
-            exit()
+            # print(grad_z.shape)
+            # print(stest.shape)
             s = grad_z @ stest
             scores.append(s)
         return torch.tensor(scores) / len(self.train_loader.dataset)
