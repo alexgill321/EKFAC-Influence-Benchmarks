@@ -1,4 +1,4 @@
-from base import BaseKFACInfluenceModule
+from influence.base import BaseKFACInfluenceModule
 import torch
 import tqdm
 

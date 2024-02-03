@@ -54,38 +54,38 @@ def main():
     train_dataloader = DataLoader(train_dataset_sub, batch_size=2)
     test_dataloader = DataLoader(test_dataset_sub, batch_size=2)
         
-    # module = LiSSAInfluenceModule(
-    #     model = model,
-    #     objective = ClassObjective(),
-    #     train_loader = train_dataloader,
-    #     test_loader = test_dataloader,
-    #     device=DEVICE,
-    #     damp=1e-4,
-    #     repeat=10,
-    #     depth=1000,
-    #     scale=100,
-    #     gnh=True
-    # )
-
-    module = AutogradInfluenceModule(
-        model=model,
-        objective=ClassObjective(),  
-        train_loader=train_dataloader,
-        test_loader=test_dataloader,
-        device=DEVICE,
-        damp=0.001
-    )
-
-
-    cg_module = CGInfluenceModule(
+    module = LiSSAInfluenceModule(
         model = model,
         objective = ClassObjective(),
         train_loader = train_dataloader,
         test_loader = test_dataloader,
         device=DEVICE,
         damp=1e-4,
+        repeat=10,
+        depth=500,
+        scale=100,
         gnh=True
     )
+
+    # module = AutogradInfluenceModule(
+    #     model=model,
+    #     objective=ClassObjective(),  
+    #     train_loader=train_dataloader,
+    #     test_loader=test_dataloader,
+    #     device=DEVICE,
+    #     damp=0.001
+    # )
+
+
+    # cg_module = CGInfluenceModule(
+    #     model = model,
+    #     objective = ClassObjective(),
+    #     train_loader = train_dataloader,
+    #     test_loader = test_dataloader,
+    #     device=DEVICE,
+    #     damp=1e-4,
+    #     gnh=True
+    # )
     
     train_idxs = list(range(1000))
     test_idxs = list(range(10))

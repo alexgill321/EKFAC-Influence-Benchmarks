@@ -5,7 +5,6 @@ from torchvision import datasets, transforms
 import os
 import sys
 sys.path.append('c:\\Users\\alexg\\Documents\\GitHub\\EKFAC-Influence-Benchmarks')
-
 from src.linear_nn import get_model, load_model
 from modules import KFACInfluenceModule, EKFACInfluenceModule
 
