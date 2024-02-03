@@ -17,7 +17,7 @@ sys.path.append('/Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks
 
 
 from src.linear_nn import get_model, load_model
-from torchinfluence.torch_influence.base import BaseObjective
+from torchinfluenceoriginal.torch_influence.base import BaseObjective
 from torchinfluence.torch_influence.modules import IHVPInfluence, AutogradInfluenceModule
 
 
