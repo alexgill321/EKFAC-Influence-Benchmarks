@@ -9,7 +9,7 @@ from torch.utils import data
 from functools import reduce
 import tqdm
 
-class BaseObjective(abc.ABC):
+class BaseInfluenceObjective(abc.ABC):
     @abc.abstractmethod
     def train_outputs(self, model: nn.Module, batch: Any) -> Any:
         """
@@ -56,7 +56,7 @@ class BaseInfluenceModule(abc.ABC):
     def __init__(
             self,
             model: nn.Module,
-            objective: BaseObjective,
+            objective: BaseInfluenceObjective,
             train_loader: data.DataLoader,
             test_loader: data.DataLoader,
             device: torch.device
@@ -213,7 +213,7 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
     def __init__(
             self,
             model: nn.Module,
-            objective: BaseObjective,
+            objective: BaseInfluenceObjective,
             train_loader: data.DataLoader,
             test_loader: data.DataLoader,
             device: torch.device,

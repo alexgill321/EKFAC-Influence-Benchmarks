@@ -66,14 +66,16 @@ def influence_correlation(inf_src1, inf_src2):
     with open(inf_src1, 'r') as file:
         lines = file.readlines()
         for line in lines:
-            influence = ast.literal_eval(line[3:])
+            parts = line.strip().split(':')
+            influence = ast.literal_eval(parts[1])
             influences_1.append(influence)
     
     influences_2 = []
     with open(inf_src2, 'r') as file:
         lines = file.readlines()
         for line in lines:
-            influence = ast.literal_eval(line[3:])
+            parts = line.strip().split(':')
+            influence = ast.literal_eval(parts[1])
             influences_2.append(influence)
 
     corr_list = []
@@ -91,11 +93,8 @@ if __name__ == '__main__':
     # plot_top_influences(os.getcwd() + '/results/top_influences.txt', 5)
     # plot_top_influences(os.getcwd() + '/results/top_influences_lissa.txt', 5)
     lissa_influences = os.getcwd() + '/results/lissa_influences.txt'
-    kfac_influences = os.getcwd() + '/results/kfac_influences_Linear(in_features=784, out_features=256, bias=True).txt'
-    ekfac_influences = os.getcwd() + '/results/ekfac_influences_Linear(in_features=784, out_features=256, bias=True).txt'
-    refac_kfac_influences = os.getcwd() + '/results/refac_kfac_influences_fc1.txt'
-    refac_ekfac_influences = os.getcwd() + '/results/refac_ekfac_influences_fc1.txt'
+    ekfac_refac_influences = os.getcwd() + '/results/ekfac_refactored_influences_fc1.txt'
     # influence_correlation(ekfac_influences, refac_ekfac_influences)
     # influence_correlation(lissa_influences, ekfac_influences)
-    # influence_correlation(lissa_influences, refac_kfac_influences)
-    plot_top_influences(os.getcwd() + '/results/refac_ekfac_top_influences.txt', 10, label='REKFAC')
+    influence_correlation(lissa_influences, ekfac_refac_influences)
+    # plot_top_influences(os.getcwd() + '/results/refac_ekfac_top_influences.txt', 10, label='REKFAC')
