@@ -1,4 +1,4 @@
-from base import BaseObjective
+from base import BaseInfluenceObjective
 import torch
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
@@ -10,7 +10,7 @@ from modules import KFACInfluenceModule, EKFACInfluenceModule
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class MNISTObjective(BaseObjective):
+class MNISTObjective(BaseInfluenceObjective):
     def train_outputs(self, model, batch):
         return model(batch[0].to(DEVICE))
 

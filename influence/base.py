@@ -9,6 +9,18 @@ from torch.utils import data
 from functools import reduce
 import tqdm
 
+def _set_attr(obj, names, val):
+    if len(names) == 1:
+        setattr(obj, names[0], val)
+    else:
+        _set_attr(getattr(obj, names[0]), names[1:], val)
+
+def _del_attr(obj, names):
+    if len(names) == 1:
+        delattr(obj, names[0])
+    else:
+        _del_attr(getattr(obj, names[0]), names[1:])
+
 class BaseInfluenceObjective(abc.ABC):
     @abc.abstractmethod
     def train_outputs(self, model: nn.Module, batch: Any) -> Any:
@@ -235,6 +247,13 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             self._get_module_from_name(self.model, layer) for layer in layers
         ]
 
+        self.layer_param_names = {
+            layer_name: tuple(name for name, _ in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
+        }
+        self.layer_param_shapes = {
+            layer_name: tuple(param.shape for _, param in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
+        }
+
         self.state = {layer: {} for layer in set(chain(self.layer_modules, self.layer_names))}
 
     @abc.abstractmethod
@@ -245,19 +264,43 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
                    train_idxs: List[int],
                    test_idxs: List[int]
                    ) -> Tensor:
-        grads = self._loss_grads(train_idxs, train=True)
+        
+        ihvps = self._compute_ihvps(test_idxs)
         scores = {}
 
-        for grad in grads:
+        training_srcs = tqdm.tqdm(
+            self._loss_grad_loader_wrapper(train=True, subset=train_idxs, batch_size=1),
+            total=len(train_idxs), 
+            desc="Calculating Training Loss Grads"
+            )
+        
+        for grad in training_srcs:
             layer_grads = self._reshape_like_layers(grad)
             for layer in self.layer_names:
                 layer_grad = layer_grads[layer].flatten()
                 if layer not in scores:
-                    scores[layer] = (layer_grad @ self.state[layer]['ihvp']).view(-1, 1)
+                    scores[layer] = (layer_grad @ ihvps[layer]).view(-1, 1)
                 else:
-                    scores[layer] = torch.cat([scores[layer], (layer_grad @ self.state[layer]['ihvp']).view(-1, 1)], dim=1)
-        
+                    scores[layer] = torch.cat([scores[layer], (layer_grad @ ihvps[layer]).view(-1, 1)], dim=1)
+                
         return scores
+    
+    def _compute_ihvps(self, test_idxs: List[int]) -> torch.Tensor:
+        ihvps = {}
+        queries = tqdm.tqdm(
+            self.test_loss_grads(test_idxs), 
+            total=len(test_idxs), 
+            desc="Calculating IHVPS"
+            )
+        
+        for grad_q in queries:
+            ihvp = self.inverse_hvp(grad_q)
+            for layer in self.layer_names:
+                if layer not in ihvps:
+                    ihvps[layer] = ihvp[layer].view(-1, 1)
+                else:
+                    ihvps[layer] = torch.cat([ihvps[layer], ihvp[layer].view(-1, 1)], dim=1)
+        return ihvps
 
     def _layer_hooks(self):
         for layer in self.layer_modules:
@@ -286,6 +329,37 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
                 layer_grads[layer_name] = layer_grad
         
         return layer_grads
+    
+    def _layer_make_functional(self, layer, layer_name):
+        assert not self.is_layer_functional
+        params = tuple(p.detach().requires_grad_() for p in self._layer_params(layer, False))
+
+        for name in self.layer_param_names[layer_name]:
+            _del_attr(layer, name.split('.'))
+
+        self.is_layer_functional = True
+
+        return params
+    
+    def _reshape_like_layer(self, vec, layer):
+        pointer = 0
+        layer_tensors = []
+
+        for dim in self.layer_param_shapes[layer]:
+            num_param = dim.numel()
+            layer_tensors.append(vec[pointer: pointer + num_param].view(dim))
+            pointer += num_param
+        
+        return tuple(layer_tensors)
+            
+    def _reinsert_layer_params(self, layer, layer_name, layer_params):
+            for name, param in zip(self.layer_param_names[layer_name], layer_params):
+                _set_attr(layer, name.split('.'), param)
+
+    def _layer_params(self, layer, with_names=True):
+        for name, p in  layer.named_parameters():
+            if p.requires_grad:
+                yield (name, p) if with_names else p
 
 class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
     def __init__(
@@ -322,31 +396,6 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
 
         self.compute_kfac_params()
 
-    def influences(self,
-                   train_idxs: List[int],
-                   test_idxs: List[int]
-                   ) -> Tensor:
-        
-        ihvps = self._compute_ihvps(test_idxs)
-        scores = {}
-
-        training_srcs = tqdm.tqdm(
-            self._loss_grad_loader_wrapper(train=True, subset=train_idxs, batch_size=1),
-            total=len(train_idxs), 
-            desc="Calculating Training Loss Grads"
-            )
-        
-        for grad in training_srcs:
-            layer_grads = self._reshape_like_layers(grad)
-            for layer in self.layer_names:
-                layer_grad = layer_grads[layer].flatten()
-                if layer not in scores:
-                    scores[layer] = (layer_grad @ ihvps[layer]).view(-1, 1)
-                else:
-                    scores[layer] = torch.cat([scores[layer], (layer_grad @ ihvps[layer]).view(-1, 1)], dim=1)
-                
-        return scores
-
     @abc.abstractmethod
     def compute_kfac_params(self):
         raise NotImplementedError()
@@ -354,23 +403,6 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
     @abc.abstractmethod
     def inverse_hvp(self, vec):
         raise NotImplementedError()
-    
-    def _compute_ihvps(self, test_idxs: List[int]) -> torch.Tensor:
-        ihvps = {}
-        queries = tqdm.tqdm(
-            self.test_loss_grads(test_idxs), 
-            total=len(test_idxs), 
-            desc="Calculating IHVPS"
-            )
-        
-        for grad_q in queries:
-            ihvp = self.inverse_hvp(grad_q)
-            for layer in self.layer_names:
-                if layer not in ihvps:
-                    ihvps[layer] = ihvp[layer].view(-1, 1)
-                else:
-                    ihvps[layer] = torch.cat([ihvps[layer], ihvp[layer].view(-1, 1)], dim=1)
-        return ihvps
     
     def _update_covs(self):
         for layer_name, layer in zip(self.layer_names, self.layer_modules):

@@ -100,8 +100,6 @@ class AutogradInfluenceModule(BaseInfluenceModule):
             device=device,
         )
 
-
-
         # remove all the model parameters, then flatten. Currently the entire model does not
         # have any params
 

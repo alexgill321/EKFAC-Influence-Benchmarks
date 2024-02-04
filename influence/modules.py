@@ -1,4 +1,8 @@
-from influence.base import BaseKFACInfluenceModule, BaseInfluenceModule, BaseInfluenceObjective
+import logging
+from typing import List, Union
+
+import numpy as np
+from influence.base import BaseKFACInfluenceModule, BaseLayerInfluenceModule, BaseInfluenceObjective
 import torch
 import tqdm
 import torch.nn as nn
@@ -116,7 +120,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
             else:
                 self.state[layer_name]['diag'].add_(diag)
             
-class PBRFInfluence(BaseKFACInfluenceModule):
+class PBRFInfluenceModule(BaseLayerInfluenceModule):
     def __init__(
             self,
             model: nn.Module,
@@ -125,6 +129,7 @@ class PBRFInfluence(BaseKFACInfluenceModule):
             test_loader: data.DataLoader,
             device: torch.device,
             damp: float,
+            layers: Union[str, List[str]],
             check_eigvals: bool = False
     ):
         super().__init__(
@@ -132,14 +137,44 @@ class PBRFInfluence(BaseKFACInfluenceModule):
             objective=objective,
             train_loader=train_loader,
             test_loader=test_loader,
-            device=device
+            device=device,
+            layers=layers
         )
         self.damp = damp
+        self.is_layer_functional = False
+
+        layer = self.layer_modules[0]
+        layer_name = self.layer_names[0]
+
+        # For now only single layer support
+        params = self._layer_make_functional(layer, layer_name)
+        flat_params = self._flatten_params_like(params)
+        d = flat_params.shape[0]
 
         hess = 0.0
 
-        for batch, batch_size in self._loader_wrapper(train=True):
-            hess_batch = torch.autograd.functional.hessian(
-                
-            )
+        for batch, batch_size in tqdm.tqdm(self._loader_wrapper(train=True), total=len(self.train_loader), desc="Estimating Hessian"):
+                def layer_f(theta_l):
+                    self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(theta_l, layer_name))
+                    return self.objective.train_loss(self.model, batch)
+
+                hess_batch = torch.autograd.functional.hessian(layer_f, flat_params, strict=True)
+                hess += hess_batch * batch_size
+
+        with torch.no_grad():
+            hess = hess / len(self.train_loader.dataset)
+            hess = hess + damp * torch.eye(d, device=self.device)
+
+            if check_eigvals:
+                eigvals = np.linalg.eigvalsh(hess.cpu().numpy())
+                logging.info("hessian min eigval %f", np.min(eigvals).item())
+                logging.info("hessian max eigval %f", np.max(eigvals).item())
+                if not bool(np.all(eigvals >= 0)):
+                    raise ValueError()
+            
+            self.inverse_hess = torch.inverse(hess)
+    
+    def inverse_hvp(self, vec):
+        return self.inverse_hess @ vec
+
 
