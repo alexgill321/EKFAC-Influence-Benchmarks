@@ -173,7 +173,7 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
 
         with torch.no_grad():
             self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(flat_params, layer_name), register=True)
-            gnh = gnh / len(self.train_loader.dataset)
+            gnh = gnh / 120000
             gnh = gnh + damp * torch.eye(d, device=self.device)
 
             if check_eigvals:

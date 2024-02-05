@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 sys.path.append('c:\\Users\\alexg\\Documents\\GitHub\\EKFAC-Influence-Benchmarks')
 from src.linear_nn import get_model, load_model
-from influence.modules import EKFACInfluenceModule
+from influence.modules import EKFACInfluenceModule, PBRFInfluenceModule
 from influence.base import BaseInfluenceObjective
 from torchinfluenceoriginal.torch_influence.modules import IHVPInfluence
 
@@ -41,10 +41,10 @@ def main():
     if not os.path.exists(os.getcwd() + '/results/lissa_influences.txt'):
         generate_lissa_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
-    if not os.path.exists(os.getcwd() + '/results/ekfac_refactored_influences_fc1.txt'):
+    if not os.path.exists(os.getcwd() + '/results/ekfac_refactored_influences_fc2.txt'):
         generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
-    if not os.path.exists(os.getcwd() + '/results/pbrf_influences.txt'):
+    if not os.path.exists(os.getcwd() + '/results/pbrf_influences_fc2.txt'):
         generate_pbrf_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
 def generate_lissa_influences(model, train_dataloader, test_dataloader, random_train, random_test):
@@ -129,43 +129,41 @@ def generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, ra
         file.close()
     
 def generate_pbrf_influences(model, train_dataloader, test_dataloader, random_train, random_test):
-    class ClassObjective(BaseObjective):
+    class MNISTObjective(BaseInfluenceObjective):
         def train_outputs(self, model, batch):
-            return model(batch[0])
+            return model(batch[0].to(DEVICE))
 
         def train_loss_on_outputs(self, outputs, batch):
             criterion = torch.nn.CrossEntropyLoss()
-            return criterion(outputs, batch[1])
+            loss = criterion(outputs, batch[1].to(DEVICE))
+            return loss
 
-        def train_regularization(self, params):
-            return L2_WEIGHT * torch.square(params.norm())
-
-        def test_loss(self, model, params, batch):
-            outputs = model(batch[0])
+        def test_loss(self, model, batch):
+            outputs = model(batch[0].to(DEVICE))
             criterion = torch.nn.CrossEntropyLoss()
-            return criterion(outputs, batch[1])
+            return criterion(outputs, batch[1].to(DEVICE))
         
-    module = IHVPInfluence(
+    module = PBRFInfluenceModule(
         model=model,
-        objective=ClassObjective(),
+        objective=MNISTObjective(),
         train_loader=train_dataloader,
         test_loader=test_dataloader,
         device=DEVICE,
-        damp=1e-5,
-        criterion = torch.nn.CrossEntropyLoss()
+        damp=1e-4,
+        layers=['fc2'],
     )
 
-    influences = []
-    for test_idx in tqdm(random_test, desc='Calcualting Influence'):
-        influences.append(module.influences(random_train, [test_idx]))
+    influences = module.influences(random_train, random_test)
+
 
     if not os.path.exists(os.getcwd() + '/results'):
         os.mkdir(os.getcwd() + '/results')
     
-    with open(os.getcwd() + f'/results/pbrf_influences.txt', 'w') as file:
-        for test_idx, influence in zip(random_test, influences):
-            file.write(f'{test_idx}: {influence.tolist()}\n')
-    file.close()
+    for layer in influences:
+        with open(os.getcwd() + f'/results/pbrf_influences_{layer}.txt', 'w') as file:
+            for test_idx, influence in zip(random_test, influences[layer]):
+                file.write(f'{test_idx}: {influence.tolist()}\n')
+        file.close()
 
 if __name__ == '__main__':
     main()
