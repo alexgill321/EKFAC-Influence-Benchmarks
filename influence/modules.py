@@ -1,9 +1,12 @@
-from influence.base import BaseKFACInfluenceModule
+import copy
+
+from tqdm import tqdm
 import torch
-import tqdm
+from base import BaseKFACInfluenceModule, BasePBRFInfluenceModule
+
+
 
 import sys
-sys.path.append('c:\\Users\\alexg\\Documents\\GitHub\\EKFAC-Influence-Benchmarks')
 
 class KFACInfluenceModule(BaseKFACInfluenceModule):  
     def inverse_hvp(self, vec):
@@ -112,5 +115,8 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
                 self.state[layer_name]['diag'] = diag
             else:
                 self.state[layer_name]['diag'].add_(diag)
-            
 
+
+class IHVPInfluence(BasePBRFInfluenceModule):
+    def inverse_hvp(self, vec):
+        return self.inverse_hess @ vec
