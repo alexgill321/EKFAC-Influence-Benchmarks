@@ -153,7 +153,7 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
 
         gnh = 0.0
 
-        for batch, batch_size in tqdm.tqdm(self._loader_wrapper(train=True), total=len(self.train_loader), desc="Estimating Hessian"):
+        for batch, batch_size in tqdm.tqdm(self._loader_wrapper(train=True, batch_size=1), total=len(self.train_loader.dataset), desc="Estimating Hessian"):
                 def layer_f(y):
                     return self.objective.train_loss_on_outputs(y, batch)
                 
@@ -163,8 +163,10 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
 
                 self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(flat_params, layer_name))
                 outputs = self.objective.train_outputs(self.model, batch)
-                hess_batch = torch.autograd.functional.hessian(layer_f, outputs, vectorize=True)
-                jac_batch = torch.autograd.functional.jacobian(layer_out_f, flat_params, strict=True).mean(dim=0)
+                o = outputs.shape[1]
+
+                hess_batch = torch.autograd.functional.hessian(layer_f, outputs, strict=True).reshape(o,o)
+                jac_batch = torch.autograd.functional.jacobian(layer_out_f, flat_params, strict=True).squeeze(0)
 
                 gnh_batch = jac_batch.t().mm(hess_batch.mm(jac_batch))
                 gnh += gnh_batch * batch_size

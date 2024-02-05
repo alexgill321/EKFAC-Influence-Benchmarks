@@ -53,7 +53,7 @@ def main():
         train_loader=train_dataloader,
         test_loader=test_dataloader,
         device=DEVICE,
-        damp=1e-6,
+        damp=1e-5,
         check_eigvals=True
     )
 

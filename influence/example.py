@@ -42,24 +42,13 @@ def main():
 
     train_idxs = list(range(0, 1000))
     test_idxs = list(range(0, 100))
-    train_dataloader = DataLoader(train_subset, batch_size=32, shuffle=False)
+    train_dataloader = DataLoader(train_subset, batch_size=1, shuffle=False)
     test_dataloader = DataLoader(test_subset, batch_size=2, shuffle=False)
 
-    # module = EKFACInfluenceModule(
-    #     model=model,
-    #     objective=MNISTObjective(),
-    #     layers=['fc1', 'fc2'],
-    #     train_loader=train_dataloader,
-    #     test_loader=test_dataloader,
-    #     device=DEVICE,
-    #     damp=1e-7,
-    #     n_samples=2
-    # )
-
-    module = KFACInfluenceModule(
+    module = EKFACInfluenceModule(
         model=model,
         objective=MNISTObjective(),
-        layers=['fc2'],
+        layers=['fc1', 'fc2'],
         train_loader=train_dataloader,
         test_loader=test_dataloader,
         device=DEVICE,
@@ -67,19 +56,30 @@ def main():
         n_samples=2
     )
 
+    # module = KFACInfluenceModule(
+    #     model=model,
+    #     objective=MNISTObjective(),
+    #     layers=['fc2'],
+    #     train_loader=train_dataloader,
+    #     test_loader=test_dataloader,
+    #     device=DEVICE,
+    #     damp=1e-4,
+    #     n_samples=2
+    # )
+
     influences = module.influences(train_idxs, test_idxs)
     
     if not os.path.exists(os.getcwd() + '/results'):
         os.mkdir(os.getcwd() + '/results')
 
     for layer in influences:
-        with open(os.getcwd() + f'/results/refac_kfac_influences_{layer}.txt', 'w') as file:
+        with open(os.getcwd() + f'/results/refac_ekfac_influences_{layer}.txt', 'w') as file:
             for i, influence in enumerate(influences[layer]):
                 file.write(f'{i}: {influence.tolist()}\n')
         file.close()
     
     k = 10
-    with open(os.getcwd() + '/results/refac_kfac_top_influences.txt', 'w') as file:
+    with open(os.getcwd() + '/results/refac_ekfac_top_influences.txt', 'w') as file:
         for layer in influences:
             file.write(f'{layer}\n')
             for i, influence in enumerate(influences[layer]):
