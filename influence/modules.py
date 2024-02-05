@@ -2,7 +2,12 @@ import copy
 
 from tqdm import tqdm
 import torch
-from base import BaseKFACInfluenceModule, BasePBRFInfluenceModule
+
+
+import sys
+sys.path.append('/Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks/torch_influence/torch_influence/')
+
+from influence.base import BaseKFACInfluenceModule, BasePBRFInfluenceModule
 
 
 
@@ -64,7 +69,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
     def compute_kfac_params(self):
         self._layer_hooks()
 
-        cov_batched = tqdm.tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
+        cov_batched = tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
 
         for batch in cov_batched:
             loss = self._loss_pseudograd(batch, n_samples=self.n_samples, generator=self.generator)
@@ -83,7 +88,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
         self._compute_ekfac_diags()
 
     def _compute_ekfac_diags(self):
-        cov_batched = tqdm.tqdm(
+        cov_batched = tqdm(
             self.cov_loader, 
             total=len(self.cov_loader), 
             desc="Calculating EKFAC Diagonals"

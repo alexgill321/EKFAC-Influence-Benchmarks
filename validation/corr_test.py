@@ -3,12 +3,18 @@ from torchvision import datasets, transforms
 import torch
 import sys
 from torch.utils.data import DataLoader
-from torch_influence import BaseObjective, LiSSAInfluenceModule
+
+
+sys.path.append('/Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks/')
+
+from torchinfluenceoriginal.torch_influence.base import BaseObjective
+from torchinfluenceoriginal.torch_influence.modules import  LiSSAInfluenceModule
+
+
 from tqdm import tqdm
 
-sys.path.append('c:\\Users\\alexg\\Documents\\GitHub\\EKFAC-Influence-Benchmarks')
 from src.linear_nn import get_model, load_model
-from influence.modules import EKFACInfluenceModule
+from influence.modules import EKFACInfluenceModule, IHVPInfluence
 from influence.base import BaseInfluenceObjective
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -16,7 +22,7 @@ L2_WEIGHT = 1e-4
 
 
 def main():
-    net, _, _= get_model()
+    net, criterion, _= get_model()
     model = load_model(net, os.getcwd() + '/models/linear_trained_model.pth')
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -40,6 +46,10 @@ def main():
 
     if not os.path.exists(os.getcwd() + '/results/ekfac_refactored_influences_fc1.txt'):
         generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test)
+
+    if not os.path.exists(os.getcwd() + '/results/PBRF_influence_scores_random.txt'):
+        generate_pbrf_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test, criterion)
+
 
 def generate_lissa_influences(model, train_dataloader, test_dataloader, random_train, random_test):
     # train_dataset_sub = CustomSubsetDataset(train_dataset, random_train)
@@ -113,6 +123,8 @@ def generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, ra
 
     influences = module.influences(random_train, random_test)
 
+    print("got inlifeuences")
+
     if not os.path.exists(os.getcwd() + '/results'):
         os.mkdir(os.getcwd() + '/results')
     
@@ -121,7 +133,52 @@ def generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, ra
             for test_idx, influence in zip(random_test, influences[layer]):
                 file.write(f'{test_idx}: {influence.tolist()}\n')
         file.close()
-    
+
+
+def generate_pbrf_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test, criterion):
+    class MNISTObjective(BaseInfluenceObjective):
+        def train_outputs(self, model, batch):
+            return model(batch[0].to(DEVICE))
+
+        def train_loss_on_outputs(self, outputs, batch):
+            criterion = torch.nn.CrossEntropyLoss()
+            loss = criterion(outputs, batch[1].to(DEVICE))
+            return loss
+
+        def test_loss(self, model, batch):
+            outputs = model(batch[0].to(DEVICE))
+            criterion = torch.nn.CrossEntropyLoss()
+            return criterion(outputs, batch[1].to(DEVICE))
+
+
+
+
+    for damp_criterion in [0.1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]:
+        module = IHVPInfluence(
+            model=model,
+            objective=MNISTObjective(),
+            train_loader=train_dataloader,
+            test_loader=test_dataloader,
+            device=DEVICE,
+            damp=damp_criterion,
+            criterion=criterion
+        )
+
+        influences = []
+
+        for test_idx in tqdm(random_test, desc='Computing Influences'):
+            influences.append(module.influences(random_train, [test_idx], ihvps_for="pbrf"))
+
+        if not os.path.exists(os.getcwd() + '/results'):
+            os.mkdir(os.getcwd() + '/results')
+
+        with open(os.getcwd() + '/results/PBRF_influence_scores_random{}.txt'.format(damp_criterion), 'w') as file:
+
+            for test_idx, influence in zip(random_test, influences):
+                file.write(f'{test_idx}: {torch.mul(influence, 1).tolist()}\n')
+        file.close()
+
+
 if __name__ == '__main__':
     main()
 

@@ -128,7 +128,7 @@ class BaseInfluenceModule(abc.ABC):
 
 
         if ihvps_for == "pbrf":
-            for grad_z in self._loss_grad_loader_wrapper(batch_size=1, subset=train_idxs, train=True):
+            for grad_z in self._loss_grad_loader_wrapper(batch_size=1, subset=train_idxs, train=True, ihvps_for = ihvps_for):
                 s = grad_z @ grads_q
                 scores.append(s)
         else:
@@ -151,6 +151,7 @@ class BaseInfluenceModule(abc.ABC):
         return torch.cat(vec)
 
     def _reshape_like_params(self, vec):
+
         pointer = 0
         split_tensors = []
         for dim in self.params_shape:
@@ -185,19 +186,25 @@ class BaseInfluenceModule(abc.ABC):
 
         return grads/len(idxs)
     
-    def _loss_grad_loader_wrapper(self, train, **kwargs):
+    def _loss_grad_loader_wrapper(self, train, ihvps_for = None, **kwargs):
 
         params = self._model_params(with_names=False)
 
         flat_params = self._flatten_params_like(params)
-        for batch, batch_size in self._loader_wrapper(train=train, **kwargs):
-            loss_fn = self.objective.train_loss if train else self.objective.test_loss
-            loss = loss_fn(self.model, batch=batch)
 
 
-            yield self._flatten_params_like(torch.autograd.grad(loss, params[2]))
+        if ihvps_for == "pbrf":
+            for batch, batch_size in self._loader_wrapper(train=train, **kwargs):
+                loss_fn = self.objective.train_loss if train else self.objective.test_loss
+                loss = loss_fn(self.model, batch=batch)
+                yield self._flatten_params_like(torch.autograd.grad(loss, params[2]))
 
-            # yield self._flatten_params_like(torch.autograd.grad(loss, self._model_params(with_names=False)))
+        else:
+            for batch, batch_size in self._loader_wrapper(train=train, **kwargs):
+                loss_fn = self.objective.train_loss if train else self.objective.test_loss
+                loss = loss_fn(self.model, batch=batch)
+
+                yield self._flatten_params_like(torch.autograd.grad(loss, self._model_params(with_names=False)))
 
 
     def _loader_wrapper(self, train, batch_size=None, subset=None, sample_n_batches=-1):
@@ -301,7 +308,7 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
         ihvps = self._compute_ihvps(test_idxs)
         scores = {}
 
-        training_srcs = tqdm.tqdm(
+        training_srcs = tqdm(
             self._loss_grad_loader_wrapper(train=True, subset=train_idxs, batch_size=1),
             total=len(train_idxs), 
             desc="Calculating Training Loss Grads"
@@ -328,7 +335,7 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
     
     def _compute_ihvps(self, test_idxs: List[int]) -> torch.Tensor:
         ihvps = {}
-        queries = tqdm.tqdm(
+        queries = tqdm(
             self.test_loss_grads(test_idxs), 
             total=len(test_idxs), 
             desc="Calculating IHVPS"
@@ -444,8 +451,8 @@ class BasePBRFInfluenceModule(BaseInfluenceModule):
 
 
         for batch_iterator in tqdm(self._loader_wrapper(train=True)):
-
             batch, batch_size = batch_iterator
+
             hess_batch = torch.autograd.functional.hessian(lambda param: param_as_input_func(jac_model, batch[0], batch[1], param, name),param, strict=False, vectorize=True).detach()
             hess = hess + hess_batch * batch_size
 
@@ -453,7 +460,17 @@ class BasePBRFInfluenceModule(BaseInfluenceModule):
 
         with torch.no_grad():
 
+
+
+
+
             hess = hess.contiguous().view(2560, 2560)
+
+            #
+            # print(hess)
+            # diagonal_elements_hess = torch.diag(hess)
+            # print(diagonal_elements_hess.tolist())
+            #
             hess = hess + damp* torch.eye(256*10, device=hess.device)
 
             self.inverse_hess = torch.inverse(hess)

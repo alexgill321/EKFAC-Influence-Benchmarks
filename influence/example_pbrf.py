@@ -47,7 +47,7 @@ def main():
     train_subset = Subset(train_dataset, range(5000))
     test_subset = Subset(train_dataset, range(100))
 
-    train_idxs = list(range(0, 5000))
+    train_idxs = list(range(0, 500))
     test_idxs = list(range(0, 10))
     train_dataloader = DataLoader(train_subset, batch_size=32, shuffle=False)
     test_dataloader = DataLoader(test_subset, batch_size=2, shuffle=False)
@@ -58,7 +58,7 @@ def main():
         train_loader=train_dataloader,
         test_loader=test_dataloader,
         device=DEVICE,
-        damp=1e-7,
+        damp=1e-3,
         criterion=criterion
     )
 
@@ -66,7 +66,6 @@ def main():
 
     for test_idx in tqdm(test_idxs, desc='Computing Influences'):
         influences.append(module.influences(train_idxs, [test_idx], ihvps_for="pbrf"))
-        # influences.append(module.influences(train_idxs, [test_idx]))
 
 
     if not os.path.exists(os.getcwd() + '/results'):

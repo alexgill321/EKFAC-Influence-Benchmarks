@@ -1,7 +1,6 @@
 #%%
 from matplotlib import patches
 from torchvision import datasets
-from torch.utils.data import Subset
 import os
 import ast
 import matplotlib.pyplot as plt
@@ -90,11 +89,14 @@ def influence_correlation(inf_src1, inf_src2):
 
 if __name__ == '__main__':
     # Replace with the path to your top_influences.txt file
-    # plot_top_influences(os.getcwd() + '/results/top_influences.txt', 5)
-    # plot_top_influences(os.getcwd() + '/results/top_influences_lissa.txt', 5)
     lissa_influences = os.getcwd() + '/results/lissa_influences.txt'
-    ekfac_refac_influences = os.getcwd() + '/results/ekfac_refactored_influences_fc1.txt'
-    # influence_correlation(ekfac_influences, refac_ekfac_influences)
-    # influence_correlation(lissa_influences, ekfac_influences)
-    influence_correlation(lissa_influences, ekfac_refac_influences)
-    # plot_top_influences(os.getcwd() + '/results/refac_ekfac_top_influences.txt', 10, label='REKFAC')
+    ekfac_refac_influences = os.getcwd() + '/results/ekfac_refactored_influences_fc2.txt'
+    for damp_criterion in [0.1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]:
+
+        print("for scaling factor {}".format(damp_criterion))
+        pbrf_influences = os.getcwd() + '/results/PBRF_influence_scores_random{}.txt'.format(damp_criterion)
+
+        influence_correlation(lissa_influences, ekfac_refac_influences)
+        influence_correlation(pbrf_influences, ekfac_refac_influences)
+        influence_correlation(pbrf_influences, lissa_influences)
+        print("\n")
