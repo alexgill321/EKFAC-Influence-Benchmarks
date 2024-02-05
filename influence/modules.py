@@ -151,30 +151,44 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
         flat_params = self._flatten_params_like(params)
         d = flat_params.shape[0]
 
-        hess = 0.0
+        gnh = 0.0
 
         for batch, batch_size in tqdm.tqdm(self._loader_wrapper(train=True), total=len(self.train_loader), desc="Estimating Hessian"):
-                def layer_f(theta_l):
+                def layer_f(y):
+                    return self.objective.train_loss_on_outputs(y, batch)
+                
+                def layer_out_f(theta_l):
                     self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(theta_l, layer_name))
-                    return self.objective.train_loss(self.model, batch)
+                    return self.objective.train_outputs(self.model, batch)
 
-                hess_batch = torch.autograd.functional.hessian(layer_f, flat_params, strict=True)
-                hess += hess_batch * batch_size
+                self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(flat_params, layer_name))
+                outputs = self.objective.train_outputs(self.model, batch)
+                hess_batch = torch.autograd.functional.hessian(layer_f, outputs, vectorize=True)
+                jac_batch = torch.autograd.functional.jacobian(layer_out_f, flat_params, strict=True).mean(dim=0)
+
+                gnh_batch = jac_batch.t().mm(hess_batch.mm(jac_batch))
+                gnh += gnh_batch * batch_size
 
         with torch.no_grad():
-            hess = hess / len(self.train_loader.dataset)
-            hess = hess + damp * torch.eye(d, device=self.device)
+            self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(flat_params, layer_name), register=True)
+            gnh = gnh / len(self.train_loader.dataset)
+            gnh = gnh + damp * torch.eye(d, device=self.device)
 
             if check_eigvals:
-                eigvals = np.linalg.eigvalsh(hess.cpu().numpy())
+                eigvals = np.linalg.eigvalsh(gnh.cpu().numpy())
                 logging.info("hessian min eigval %f", np.min(eigvals).item())
                 logging.info("hessian max eigval %f", np.max(eigvals).item())
                 if not bool(np.all(eigvals >= 0)):
                     raise ValueError()
             
-            self.inverse_hess = torch.inverse(hess)
+            self.inverse_gnh = torch.inverse(gnh)
     
     def inverse_hvp(self, vec):
-        return self.inverse_hess @ vec
+        layer_grads = self._reshape_like_layers(vec)
+        ihvps = {}
 
+        for layer in self.layer_names:
+            ihvps[layer] = self.inverse_gnh @ layer_grads[layer].view(-1)
+
+        return ihvps
 

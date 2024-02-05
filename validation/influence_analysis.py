@@ -92,12 +92,12 @@ if __name__ == '__main__':
     # Replace with the path to your top_influences.txt file
     # plot_top_influences(os.getcwd() + '/results/top_influences.txt', 5)
     # plot_top_influences(os.getcwd() + '/results/top_influences_lissa.txt', 5)
-    lissa_influences = os.getcwd() + '/results/lissa_influences.txt'
-    ekfac_refac_influences = os.getcwd() + '/results/ekfac_refactored_influences_fc2.txt'
-    pbrf_influences = os.getcwd() + '/results/pbrf_influences.txt'
+    # lissa_influences = os.getcwd() + '/results/lissa_influences.txt'
+    ekfac_refac_influences = os.getcwd() + '/results/refac_kfac_influences_fc2.txt'
+    pbrf_influences = os.getcwd() + '/results/pbrf_influences_fc2.txt'
     # influence_correlation(ekfac_influences, refac_ekfac_influences)
     # influence_correlation(lissa_influences, ekfac_influences)
-    influence_correlation(lissa_influences, ekfac_refac_influences)
-    influence_correlation(lissa_influences, pbrf_influences)
+    # influence_correlation(lissa_influences, ekfac_refac_influences)
+    # influence_correlation(lissa_influences, pbrf_influences)
     influence_correlation(ekfac_refac_influences, pbrf_influences)
     # plot_top_influences(os.getcwd() + '/results/refac_ekfac_top_influences.txt', 10, label='REKFAC')

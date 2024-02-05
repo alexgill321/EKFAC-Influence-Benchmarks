@@ -352,9 +352,10 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         
         return tuple(layer_tensors)
             
-    def _reinsert_layer_params(self, layer, layer_name, layer_params):
+    def _reinsert_layer_params(self, layer, layer_name, layer_params, register=False):
             for name, param in zip(self.layer_param_names[layer_name], layer_params):
-                _set_attr(layer, name.split('.'), param)
+                _set_attr(layer, name.split('.'), torch.nn.Parameter(param) if register else param)
+            self.is_layer_functional = not register
 
     def _layer_params(self, layer, with_names=True):
         for name, p in  layer.named_parameters():

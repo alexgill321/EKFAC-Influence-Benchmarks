@@ -38,7 +38,7 @@ def main():
     ])
 
     train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
-    train_subset = Subset(train_dataset, range(5000))
+    train_subset = Subset(train_dataset, range(1000))
     test_subset = Subset(train_dataset, range(100))
 
     train_idxs = list(range(0, 1000))
@@ -53,17 +53,25 @@ def main():
         train_loader=train_dataloader,
         test_loader=test_dataloader,
         device=DEVICE,
-        damp=1e-4,
+        damp=1e-6,
         check_eigvals=True
     )
 
     influences = module.influences(train_idxs, test_idxs)
 
     for layer in influences:
-        print(layer)
-        print(influences[layer].shape)
-        print(influences[layer])
-        print()
+        with open(os.getcwd() + f'/results/pbrf_influences_{layer}.txt', 'w') as f:
+            for i, influence in enumerate(influences[layer]):
+                f.write(f'{i}: {influence.tolist()}\n')
+        f.close()
+
+    k = 10
+    with open(os.getcwd() + '/results/pbrf_top_influences.txt', 'w') as file:
+        for layer in influences:
+            file.write(f'{layer}\n')
+            for i, influence in enumerate(influences[layer]):
+                top = torch.topk(influence, k=k).indices
+                file.write(f'Sample {i}  Top {k} Influence Indexes: {[val for val in top.tolist()]}\n')
 
 if __name__ == '__main__':
     main()
