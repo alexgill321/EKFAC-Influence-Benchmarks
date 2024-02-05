@@ -104,8 +104,6 @@ class BaseInfluenceModule(abc.ABC):
 
             for grad_q in self.test_loss_grads(test_idxs, ihvps_for = ihvps_for):
                 ihvps.append(self.inverse_hvp(grad_q))
-
-
             return torch.cat(ihvps, dim=0)
 
 
@@ -125,7 +123,6 @@ class BaseInfluenceModule(abc.ABC):
 
         grads_q = self.query_grads(test_idxs, ihvps_for = ihvps_for)
         scores = []
-
 
         if ihvps_for == "pbrf":
             for grad_z in self._loss_grad_loader_wrapper(batch_size=1, subset=train_idxs, train=True, ihvps_for = ihvps_for):
@@ -174,7 +171,7 @@ class BaseInfluenceModule(abc.ABC):
 
         grads = 0.0
         if ihvps_for == "pbrf":
-            for grad_batch in self._loss_grad_loader_wrapper(subset=idxs, train=train):
+            for grad_batch in self._loss_grad_loader_wrapper(subset=idxs, train=train, ihvps_for = ihvps_for):
 
                 batch_size = grad_batch.shape[0]
                 grads = grads + grad_batch * batch_size
@@ -194,6 +191,7 @@ class BaseInfluenceModule(abc.ABC):
 
 
         if ihvps_for == "pbrf":
+
             for batch, batch_size in self._loader_wrapper(train=train, **kwargs):
                 loss_fn = self.objective.train_loss if train else self.objective.test_loss
                 loss = loss_fn(self.model, batch=batch)
@@ -418,7 +416,8 @@ class BasePBRFInfluenceModule(BaseInfluenceModule):
             test_loader: data.DataLoader,
             device: torch.device,
             damp: float,
-            criterion = None
+            criterion = None,
+            epsilon = 1
     ):
         super().__init__(
             model=model,
@@ -430,6 +429,7 @@ class BasePBRFInfluenceModule(BaseInfluenceModule):
 
         self.damp = damp
         self.criterion = criterion
+        self.epsilon = epsilon
 
         jac_model = copy.deepcopy(self.model)
         all_params, all_names = self.extract_weights(jac_model)
@@ -459,14 +459,8 @@ class BasePBRFInfluenceModule(BaseInfluenceModule):
             hess_batch_itr+=1
 
         with torch.no_grad():
-
-
-
-
-
             hess = hess.contiguous().view(2560, 2560)
-
-            #
+            hess = hess / self.epsilon
             # print(hess)
             # diagonal_elements_hess = torch.diag(hess)
             # print(diagonal_elements_hess.tolist())

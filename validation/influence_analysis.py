@@ -1,4 +1,7 @@
 #%%
+import argparse
+
+import pandas as pd
 from matplotlib import patches
 from torchvision import datasets
 import os
@@ -84,19 +87,88 @@ def influence_correlation(inf_src1, inf_src2):
         inf_stacked = torch.stack([inf_1, inf_2], dim=0)
         corr_list.append(torch.corrcoef(inf_stacked)[0, 1].item())
     print(f'Average Correlation for {inf_src1} and {inf_src2}: {sum(corr_list) / len(corr_list)}')
+    return sum(corr_list) / len(corr_list)
 
     
 
 if __name__ == '__main__':
     # Replace with the path to your top_influences.txt file
+
+    parser = argparse.ArgumentParser("N-gram Language Model")
+    parser.add_argument('--do_PBRF_search', type=bool, required=False, default=False)
+    parser.add_argument('--do_EKFAC_search', type=bool, required=False, default=False)
+    parser.add_argument('--best_PBRF_path', type=str, required=False, default='/results/PBRF_influence_scores_random_scaling_0.001_epsilon_120000.txt')
+    parser.add_argument('--best_EKFAC_path', type=str, required=False, default='/results/ekfac_refactored_influences_fc2_scaling_0.01.txt')
+
+    args = parser.parse_args()
+
+    args.do_EKFAC_search = True
+
+
     lissa_influences = os.getcwd() + '/results/lissa_influences.txt'
-    ekfac_refac_influences = os.getcwd() + '/results/ekfac_refactored_influences_fc2.txt'
-    for damp_criterion in [0.1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]:
 
-        print("for scaling factor {}".format(damp_criterion))
-        pbrf_influences = os.getcwd() + '/results/PBRF_influence_scores_random{}.txt'.format(damp_criterion)
 
-        influence_correlation(lissa_influences, ekfac_refac_influences)
-        influence_correlation(pbrf_influences, ekfac_refac_influences)
-        influence_correlation(pbrf_influences, lissa_influences)
-        print("\n")
+    if args.do_PBRF_search:
+
+
+        print("getting all PBRF scores, EKFAC is constant")
+        ekfac_refac_influences = os.getcwd() + args.best_EKFAC_path
+
+    # pbrf_influences = os.getcwd() + '/results/PBRF_influence_scores_random_scaling_0.001_epsilon_120000.txt'
+
+        matching_files = [filename for filename in os.listdir(os.getcwd() + '/results/') if filename.startswith('PBRF_influence_scores_random_scaling_')]
+
+        all_corr_data = []
+        column_names = ["scaling", "downweight", "corr_ekfac", "corr_lissa"]
+
+        for filename in matching_files:
+
+            try:
+                print("the filename is {}".format(filename))
+                scaling = filename.split("_")[-3]
+                downweight = filename.split("_")[-1][:-4]
+                pbrf_influences = os.getcwd() + '/results/{}'.format(filename)
+                _ = influence_correlation(lissa_influences, ekfac_refac_influences)
+                corr1 = influence_correlation(pbrf_influences, ekfac_refac_influences)
+                corr2 = influence_correlation(pbrf_influences, lissa_influences)
+                all_corr_data.append([scaling, downweight, corr1, corr2])
+                print("\n")
+            except Exception as e:
+                print(e)
+
+            df_hyper = pd.DataFrame(data = all_corr_data, columns=column_names)
+            df_hyper.to_csv('random_search_pbrf_results.csv', index=False)
+
+    elif args.do_EKFAC_search :
+
+        pbrf_influences = os.getcwd() + args.best_PBRF_path
+
+        all_corr_data = []
+
+        column_names = ["scaling", "corr_pbrf", "corr_lissa"]
+        matching_files = [filename for filename in os.listdir(os.getcwd() + '/results/') if filename.startswith('ekfac_refactored_influences_fc2_scaling_')]
+
+
+        for filename in matching_files:
+
+            try:
+                print("the filename is {}".format(filename))
+                downweight = filename.split("_")[-1][:-4]
+                ekfac_refac_influences = os.getcwd() + '/results/{}'.format(filename)
+                corr1 = influence_correlation(lissa_influences, ekfac_refac_influences)
+                corr2 = influence_correlation(pbrf_influences, ekfac_refac_influences)
+                corr3 = influence_correlation(pbrf_influences, lissa_influences)
+                all_corr_data.append([downweight, corr2, corr1])
+                print("\n")
+            except Exception as e:
+                print(e)
+
+            df_hyper = pd.DataFrame(data = all_corr_data, columns=column_names)
+            df_hyper.to_csv('random_search_ekfac_results.csv', index=False)
+
+
+
+
+
+
+
