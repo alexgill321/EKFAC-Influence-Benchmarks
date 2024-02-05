@@ -49,7 +49,7 @@ def main():
     generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
     # if not os.path.exists(os.getcwd() + '/results/PBRF_influence_scores_random.txt'):
-    #     generate_pbrf_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test, criterion)
+    generate_pbrf_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test, criterion)
 
 
 def generate_lissa_influences(model, train_dataloader, test_dataloader, random_train, random_test):
