@@ -119,6 +119,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
                 self.state[layer_name]['diag'] = diag
             else:
                 self.state[layer_name]['diag'].add_(diag)
+
             
 class PBRFInfluenceModule(BaseLayerInfluenceModule):
     def __init__(
@@ -130,7 +131,8 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
             device: torch.device,
             damp: float,
             layers: Union[str, List[str]],
-            check_eigvals: bool = False
+            check_eigvals: bool = False,
+            gnh: bool = False,
     ):
         super().__init__(
             model=model,
@@ -142,6 +144,7 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
         )
         self.damp = damp
         self.is_layer_functional = False
+        self.gnh = gnh
 
         layer = self.layer_modules[0]
         layer_name = self.layer_names[0]
@@ -153,27 +156,35 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
 
         gnh = 0.0
 
-        for batch, batch_size in tqdm.tqdm(self._loader_wrapper(train=True, batch_size=1), total=len(self.train_loader.dataset), desc="Estimating Hessian"):
+        for batch, batch_size in tqdm.tqdm(self._loader_wrapper(train=True), total=len(self.train_loader), desc="Estimating Hessian"):
                 def layer_f(y):
                     return self.objective.train_loss_on_outputs(y, batch)
+                
+                def layer_f_hess(theta_l):
+                    self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(theta_l, layer_name))
+                    return self.objective.train_loss(self.model, batch)
                 
                 def layer_out_f(theta_l):
                     self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(theta_l, layer_name))
                     return self.objective.train_outputs(self.model, batch)
+                
+                if self.gnh:
+                    self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(flat_params, layer_name))
+                    outputs = self.objective.train_outputs(self.model, batch)
+                    o = outputs.shape[1]
 
-                self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(flat_params, layer_name))
-                outputs = self.objective.train_outputs(self.model, batch)
-                o = outputs.shape[1]
+                    hess_batch = torch.autograd.functional.hessian(layer_f, outputs, strict=True).reshape(o,o)
+                    jac_batch = torch.autograd.functional.jacobian(layer_out_f, flat_params, strict=True).squeeze(0)
 
-                hess_batch = torch.autograd.functional.hessian(layer_f, outputs, strict=True).reshape(o,o)
-                jac_batch = torch.autograd.functional.jacobian(layer_out_f, flat_params, strict=True).squeeze(0)
-
-                gnh_batch = jac_batch.t().mm(hess_batch.mm(jac_batch))
-                gnh += gnh_batch * batch_size
+                    gnh_batch = jac_batch.t().mm(hess_batch.mm(jac_batch))
+                    gnh += gnh_batch * batch_size
+                else:
+                    hess_batch = torch.autograd.functional.hessian(layer_f_hess, flat_params, strict=True)
+                    gnh += hess_batch * batch_size
 
         with torch.no_grad():
             self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(flat_params, layer_name), register=True)
-            gnh = gnh / 120000
+            gnh = gnh / len(self.train_loader.dataset)
             gnh = gnh + damp * torch.eye(d, device=self.device)
 
             if check_eigvals:

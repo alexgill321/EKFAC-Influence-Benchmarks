@@ -1,11 +1,15 @@
 #%%
+import argparse
+import itertools
 from matplotlib import patches
+import pandas as pd
 from torchvision import datasets
 from torch.utils.data import Subset
 import os
 import ast
 import matplotlib.pyplot as plt
 import torch
+from IPython.display import display
 
 
 def plot_top_influences(inf_src, n, k=5, label=None):
@@ -84,20 +88,42 @@ def influence_correlation(inf_src1, inf_src2):
         inf_2 = torch.tensor(j)
         inf_stacked = torch.stack([inf_1, inf_2], dim=0)
         corr_list.append(torch.corrcoef(inf_stacked)[0, 1].item())
-    print(f'Average Correlation for {inf_src1} and {inf_src2}: {sum(corr_list) / len(corr_list)}')
+    return sum(corr_list) / len(corr_list)
 
     
 
 if __name__ == '__main__':
-    # Replace with the path to your top_influences.txt file
-    # plot_top_influences(os.getcwd() + '/results/top_influences.txt', 5)
-    # plot_top_influences(os.getcwd() + '/results/top_influences_lissa.txt', 5)
-    # lissa_influences = os.getcwd() + '/results/lissa_influences.txt'
-    ekfac_refac_influences = os.getcwd() + '/results/ekfac_refactored_influences_fc2.txt'
-    pbrf_influences = os.getcwd() + '/results/pbrf_influences_fc2.txt'
-    # influence_correlation(ekfac_influences, refac_ekfac_influences)
-    # influence_correlation(lissa_influences, ekfac_influences)
-    # influence_correlation(lissa_influences, ekfac_refac_influences)
-    # influence_correlation(lissa_influences, pbrf_influences)
-    influence_correlation(ekfac_refac_influences, pbrf_influences)
-    # plot_top_influences(os.getcwd() + '/results/refac_ekfac_top_influences.txt', 10, label='REKFAC')
+
+    lissa_influences = os.getcwd() + '/results/lissa_influences.txt'
+
+    print("getting all PBRF scores")
+
+# pbrf_influences = os.getcwd() + '/results/PBRF_influence_scores_random_scaling_0.001_epsilon_120000.txt'
+
+    pbrf_files = [filename for filename in os.listdir(os.getcwd() + '/results/') if filename.startswith('pbrf_influences_fc2_')]
+
+    print("getting all EKFAC scores")
+
+    ekfac_files = [filename for filename in os.listdir(os.getcwd() + '/results/') if filename.startswith('ekfac_influences_fc2_')]
+
+
+    pairs = list(itertools.product(ekfac_files, pbrf_files))
+    
+    all_corr_data = []
+    for  ekfac_file, pbrf_file in pairs:
+        try:
+            ekfac_damp = ekfac_file.split("_")[-1][:-4]
+            pbrf_damp = pbrf_file.split("_")[-1][:-4]
+
+            corr = influence_correlation(os.getcwd() + '/results/' + ekfac_file, os.getcwd() + '/results/' + pbrf_file)
+            all_corr_data.append([ekfac_damp, pbrf_damp, corr])
+        except Exception as e:
+            print(e)
+
+        column_names = ['ekfac_damp', 'pbrf_damp', 'correlation']
+
+        df_hyper = pd.DataFrame(data = all_corr_data, columns=column_names)
+
+        df_hyper.to_csv(os.getcwd() + '/results/damp_search_results.csv', index=False)
+    
+    display(df_hyper)

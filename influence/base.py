@@ -170,7 +170,6 @@ class BaseInfluenceModule(abc.ABC):
             loss = loss_fn(self.model, batch=batch)
             yield self._flatten_params_like(torch.autograd.grad(loss, self._model_params(with_names=False)))
 
-
     def _loader_wrapper(self, train, batch_size=None, subset=None, sample_n_batches=-1):
         loader = self.train_loader if train else self.test_loader
         batch_size = loader.batch_size if (batch_size is None) else batch_size
