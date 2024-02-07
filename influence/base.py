@@ -267,8 +267,7 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
             cov_loader: Optional[data.DataLoader] = None,
             n_samples: int = 1,
             damp: float = 1e-6,
-            seed: int = 42,
-            criterion = None
+            seed: int = 42
     ):
         super().__init__(
             model=model,
@@ -416,8 +415,7 @@ class BasePBRFInfluenceModule(BaseInfluenceModule):
             test_loader: data.DataLoader,
             device: torch.device,
             damp: float,
-            criterion = None,
-            epsilon = 1
+            criterion = None
     ):
         super().__init__(
             model=model,
@@ -429,7 +427,6 @@ class BasePBRFInfluenceModule(BaseInfluenceModule):
 
         self.damp = damp
         self.criterion = criterion
-        self.epsilon = epsilon
 
         jac_model = copy.deepcopy(self.model)
         all_params, all_names = self.extract_weights(jac_model)
@@ -453,14 +450,14 @@ class BasePBRFInfluenceModule(BaseInfluenceModule):
         for batch_iterator in tqdm(self._loader_wrapper(train=True)):
             batch, batch_size = batch_iterator
 
-            hess_batch = torch.autograd.functional.hessian(lambda param: param_as_input_func(jac_model, batch[0], batch[1], param, name),param, strict=False, vectorize=True).detach()
+            hess_batch = torch.autograd.functional.hessian(lambda param: param_as_input_func(jac_model, batch[0], batch[1], param, name), param, strict=False, vectorize=True).detach()
             hess = hess + hess_batch * batch_size
 
             hess_batch_itr+=1
 
         with torch.no_grad():
             hess = hess.contiguous().view(2560, 2560)
-            hess = hess / self.epsilon
+            hess = hess / len(self.train_loader.dataset)
             # print(hess)
             # diagonal_elements_hess = torch.diag(hess)
             # print(diagonal_elements_hess.tolist())

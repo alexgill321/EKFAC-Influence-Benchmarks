@@ -6,7 +6,8 @@ from torch.utils.data import DataLoader
 from sklearn.model_selection import ParameterSampler
 
 
-sys.path.append('/Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks/')
+# sys.path.append('/Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks/')
+sys.path.append('/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks')
 
 from torchinfluenceoriginal.torch_influence.base import BaseObjective
 from torchinfluenceoriginal.torch_influence.modules import  LiSSAInfluenceModule
@@ -42,11 +43,11 @@ def main():
     train_dataloader = DataLoader(train_dataset, batch_size=32)
     test_dataloader = DataLoader(test_dataset, batch_size=32)
 
-    if not os.path.exists(os.getcwd() + '/results/lissa_influences.txt'):
-        generate_lissa_influences(model, train_dataloader, test_dataloader, random_train, random_test)
+    # if not os.path.exists(os.getcwd() + '/results/lissa_influences.txt'):
+    #     generate_lissa_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
     # if not os.path.exists(os.getcwd() + '/results/ekfac_refactored_influences_fc1.txt'):
-    generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test)
+    #generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
     # if not os.path.exists(os.getcwd() + '/results/PBRF_influence_scores_random.txt'):
     generate_pbrf_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test, criterion)
@@ -150,21 +151,9 @@ def generate_pbrf_refac_influences(model, train_dataloader, test_dataloader, ran
             outputs = model(batch[0].to(DEVICE))
             criterion = torch.nn.CrossEntropyLoss()
             return criterion(outputs, batch[1].to(DEVICE))
+        
+    for damp in [.01, .1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]:
 
-
-
-
-
-    params_grid = {
-        'scaling_factor': [0.1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6],
-        'downweight_factor': [0, 1, len(train_dataloader.dataset), 2*len(train_dataloader.dataset) , 48000]
-    }
-    random_search = ParameterSampler(params_grid, n_iter=12)
-
-    for param in tqdm(random_search):
-
-
-        print("now running for {}".format(param))
     # for damp_criterion in [0.1]:
         # , 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]:
         module = IHVPInfluence(
@@ -173,9 +162,8 @@ def generate_pbrf_refac_influences(model, train_dataloader, test_dataloader, ran
             train_loader=train_dataloader,
             test_loader=test_dataloader,
             device=DEVICE,
-            damp=param['scaling_factor'],
+            damp=damp,
             criterion=criterion,
-            epsilon = param['downweight_factor']
         )
 
         influences = []
