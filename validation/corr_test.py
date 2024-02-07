@@ -104,7 +104,7 @@ def generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, ra
             criterion = torch.nn.CrossEntropyLoss()
             return criterion(outputs, batch[1].to(DEVICE))
         
-    for damp in [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7]:
+    for damp in [1e-8, 1e-9, 1e-10]:
         module = EKFACInfluenceModule(
             model=model,
             objective=MNISTObjective(),
@@ -142,7 +142,7 @@ def generate_pbrf_influences(model, train_dataloader, test_dataloader, random_tr
             criterion = torch.nn.CrossEntropyLoss()
             return criterion(outputs, batch[1].to(DEVICE))
 
-    for damp in [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7]:
+    for damp in [1e-8, 1e-9, 1e-10]:
         module = PBRFInfluenceModule(
             model=model,
             objective=MNISTObjective(),
@@ -151,7 +151,7 @@ def generate_pbrf_influences(model, train_dataloader, test_dataloader, random_tr
             device=DEVICE,
             damp=damp,
             layers=['fc2'],
-            gnh=False
+            gnh=True
         )
 
         influences = module.influences(random_train, random_test)
@@ -161,7 +161,7 @@ def generate_pbrf_influences(model, train_dataloader, test_dataloader, random_tr
             os.mkdir(os.getcwd() + '/results')
         
         for layer in influences:
-            with open(os.getcwd() + f'/results/pbrf_influences_{layer}_damp_{damp}.txt', 'w') as file:
+            with open(os.getcwd() + f'/results/pbrf_influences_{layer}_damp_{damp}_gnh.txt', 'w') as file:
                 for test_idx, influence in zip(random_test, influences[layer]):
                     file.write(f'{test_idx}: {influence.tolist()}\n')
             file.close()

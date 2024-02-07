@@ -100,7 +100,7 @@ if __name__ == '__main__':
 
 # pbrf_influences = os.getcwd() + '/results/PBRF_influence_scores_random_scaling_0.001_epsilon_120000.txt'
 
-    pbrf_files = [filename for filename in os.listdir(os.getcwd() + '/results/') if filename.startswith('PBRF_influence_scores') or filename.startswith('pbrf_influences_fc2_')]
+    pbrf_files = [filename for filename in os.listdir(os.getcwd() + '/results/') if filename.startswith('pbrf_influences_fc2_')]
 
     print("getting all EKFAC scores")
 
@@ -113,14 +113,17 @@ if __name__ == '__main__':
     for  ekfac_file, pbrf_file in pairs:
         try:
             ekfac_damp = ekfac_file.split("_")[-1][:-4]
-            pbrf_damp = pbrf_file.split("_")[-1][:-4]
+            pbrf_split = pbrf_file[:-4].split("_")
+            pbrf_damp = pbrf_split[pbrf_split.index('damp')+1]
+
+            gnh = 'gnh' in pbrf_split
 
             corr = influence_correlation(os.getcwd() + '/results/' + ekfac_file, os.getcwd() + '/results/' + pbrf_file)
-            all_corr_data.append([ekfac_damp, pbrf_damp, corr])
+            all_corr_data.append([ekfac_damp, pbrf_damp, gnh, corr])
         except Exception as e:
             print(e)
 
-        column_names = ['ekfac_damp', 'pbrf_damp', 'correlation']
+        column_names = ['ekfac_damp', 'pbrf_damp', 'pbrf_gnh', 'correlation']
 
         df_hyper = pd.DataFrame(data = all_corr_data, columns=column_names)
 

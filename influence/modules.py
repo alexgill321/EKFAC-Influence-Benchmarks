@@ -173,8 +173,8 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
                     outputs = self.objective.train_outputs(self.model, batch)
                     o = outputs.shape[1]
 
-                    hess_batch = torch.autograd.functional.hessian(layer_f, outputs, strict=True).reshape(o,o)
-                    jac_batch = torch.autograd.functional.jacobian(layer_out_f, flat_params, strict=True).squeeze(0)
+                    hess_batch = torch.autograd.functional.hessian(layer_f, outputs, vectorize=True).mean(0).mean(1)
+                    jac_batch = torch.autograd.functional.jacobian(layer_out_f, flat_params, vectorize=True).mean(0)
 
                     gnh_batch = jac_batch.t().mm(hess_batch.mm(jac_batch))
                     gnh += gnh_batch * batch_size
@@ -197,11 +197,20 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
             self.inverse_gnh = torch.inverse(gnh)
     
     def inverse_hvp(self, vec):
-        layer_grads = self._reshape_like_layers(vec)
         ihvps = {}
 
         for layer in self.layer_names:
-            ihvps[layer] = self.inverse_gnh @ layer_grads[layer].view(-1)
+            ihvps[layer] = self.inverse_gnh @ vec
 
         return ihvps
+    
+    def _loss_grad_loader_wrapper(self, train, **kwargs):
+
+        for batch, _ in self._loader_wrapper(train=train, **kwargs):
+            loss_fn = self.objective.train_loss if train else self.objective.test_loss
+            loss = loss_fn(self.model, batch=batch)
+            for layer in self.layer_modules:
+                params = self._layer_params(layer, with_names=False)
+                grad = torch.autograd.grad(loss, params)
+                yield self._flatten_params_like(grad)
 

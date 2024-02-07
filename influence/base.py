@@ -274,23 +274,13 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             )
         
         for grad in training_srcs:
-            layer_grads = self._reshape_like_layers(grad)
             for layer in self.layer_names:
-                layer_grad = layer_grads[layer].flatten()
                 if layer not in scores:
-                    scores[layer] = (layer_grad @ ihvps[layer]).view(-1, 1)
+                    scores[layer] = (grad @ ihvps[layer]).view(-1, 1)
                 else:
-                    scores[layer] = torch.cat([scores[layer], (layer_grad @ ihvps[layer]).view(-1, 1)], dim=1)
+                    scores[layer] = torch.cat([scores[layer], (grad @ ihvps[layer]).view(-1, 1)], dim=1)
                 
         return scores
-    
-    def _loss_grad_loader_wrapper(self, train, **kwargs):
-
-        for batch, _ in self._loader_wrapper(train=train, **kwargs):
-            loss_fn = self.objective.train_loss if train else self.objective.test_loss
-            loss = loss_fn(self.model, batch=batch)
-            for layer in self.layer_modules:
-                yield self._flatten_params_like(torch.autograd.grad(loss, self._layer_params(layer, with_names=False)))
     
     def _compute_ihvps(self, test_idxs: List[int]) -> torch.Tensor:
         ihvps = {}
