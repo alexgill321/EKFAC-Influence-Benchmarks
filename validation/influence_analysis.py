@@ -100,7 +100,7 @@ if __name__ == '__main__':
 
 # pbrf_influences = os.getcwd() + '/results/PBRF_influence_scores_random_scaling_0.001_epsilon_120000.txt'
 
-    pbrf_files = [filename for filename in os.listdir(os.getcwd() + '/results/') if filename.startswith('pbrf_influences_fc2_')]
+    pbrf_files = [filename for filename in os.listdir(os.getcwd() + '/results/') if filename.startswith('PBRF_influence_scores') or filename.startswith('pbrf_influences_fc2_')]
 
     print("getting all EKFAC scores")
 
