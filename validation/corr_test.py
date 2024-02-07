@@ -142,7 +142,7 @@ def generate_pbrf_influences(model, train_dataloader, test_dataloader, random_tr
             criterion = torch.nn.CrossEntropyLoss()
             return criterion(outputs, batch[1].to(DEVICE))
 
-    for damp in [1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7]:
+    for damp in [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7]:
         module = PBRFInfluenceModule(
             model=model,
             objective=MNISTObjective(),
