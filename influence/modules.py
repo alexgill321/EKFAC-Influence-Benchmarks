@@ -179,7 +179,7 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
                     gnh_batch = jac_batch.t().mm(hess_batch.mm(jac_batch))
                     gnh += gnh_batch * batch_size
                 else:
-                    hess_batch = torch.autograd.functional.hessian(layer_f_hess, flat_params, strict=True)
+                    hess_batch = torch.autograd.functional.hessian(layer_f_hess, flat_params, strict=False, vectorize=True)
                     gnh += hess_batch * batch_size
 
         with torch.no_grad():
