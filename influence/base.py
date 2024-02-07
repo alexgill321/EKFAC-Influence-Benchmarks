@@ -284,6 +284,14 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
                 
         return scores
     
+    def _loss_grad_loader_wrapper(self, train, **kwargs):
+
+        for batch, _ in self._loader_wrapper(train=train, **kwargs):
+            loss_fn = self.objective.train_loss if train else self.objective.test_loss
+            loss = loss_fn(self.model, batch=batch)
+            for layer in self.layer_modules:
+                yield self._flatten_params_like(torch.autograd.grad(loss, self._layer_params(layer, with_names=False)))
+    
     def _compute_ihvps(self, test_idxs: List[int]) -> torch.Tensor:
         ihvps = {}
         queries = tqdm.tqdm(
