@@ -8,9 +8,6 @@ import tqdm
 import torch.nn as nn
 from torch.utils import data
 
-
-import sys
-
 class KFACInfluenceModule(BaseKFACInfluenceModule):  
     def inverse_hvp(self, vec):
         layer_grads = self._reshape_like_layers(vec)
@@ -212,7 +209,3 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
                 params = self._layer_params(layer, with_names=False)
                 grad = torch.autograd.grad(loss, params)
                 yield self._flatten_params_like(grad)
-
-class IHVPInfluence(BasePBRFInfluenceModule):
-    def inverse_hvp(self, vec):
-        return self.inverse_hess @ vec

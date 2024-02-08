@@ -10,7 +10,7 @@ from torch import Tensor, nn
 from torch.utils import data
 from functools import reduce
 from typing import Any, List, Optional, Union
-import tqdm
+from tqdm import tqdm
 
 def _set_attr(obj, names, val):
     if len(names) == 1:
