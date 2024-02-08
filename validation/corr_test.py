@@ -6,10 +6,12 @@ from torch.utils.data import DataLoader, Subset
 from torch_influence import BaseObjective, LiSSAInfluenceModule
 from tqdm import tqdm
 
+import sys
+sys.path.append('/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks')
+# sys.path.append('Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks')
 from src.linear_nn import get_model, load_model
 from influence.modules import EKFACInfluenceModule, PBRFInfluenceModule
 from influence.base import BaseInfluenceObjective
-from torchinfluenceoriginal.torch_influence.modules import IHVPInfluence
 
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -29,7 +31,6 @@ def main():
 
     train_dataset = datasets.MNIST(root='../data', train=True, transform=transform, download=True)
     test_dataset = datasets.MNIST(root='../data', train=False, transform=transform, download=True)
-    train_subset = Subset(train_dataset, range(1000))
 
     random_train = torch.randperm(len(train_dataset), generator=generator)[:500]
     random_test = torch.randperm(len(test_dataset), generator=generator)[:10]
@@ -103,7 +104,7 @@ def generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, ra
             criterion = torch.nn.CrossEntropyLoss()
             return criterion(outputs, batch[1].to(DEVICE))
         
-    for damp in [1e-8, 1e-9, 1e-10]:
+    for damp in [1e-2]:
         module = EKFACInfluenceModule(
             model=model,
             objective=MNISTObjective(),
@@ -115,7 +116,6 @@ def generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, ra
             n_samples=2
         )
 
-        influences = module.influences(random_train, random_test)
         influences = module.influences(random_train, random_test)
 
         if not os.path.exists(os.getcwd() + '/results'):
@@ -142,7 +142,7 @@ def generate_pbrf_influences(model, train_dataloader, test_dataloader, random_tr
             criterion = torch.nn.CrossEntropyLoss()
             return criterion(outputs, batch[1].to(DEVICE))
 
-    for damp in [1e-8, 1e-9, 1e-10]:
+    for damp in [1e-7]:
         module = PBRFInfluenceModule(
             model=model,
             objective=MNISTObjective(),

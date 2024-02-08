@@ -1,11 +1,9 @@
 import abc
 from tqdm import tqdm
 
-import copy
 import torch
 import numpy as np
 from itertools import chain
-from torch.nn import Module
 from torch import Tensor, nn
 from torch.utils import data
 from functools import reduce
@@ -97,53 +95,37 @@ class BaseInfluenceModule(abc.ABC):
         """
         Returns the gradient of the training loss with respect to the model parameters.
         """
-        return self._loss_grad(train_idxs, train=True)
+        return self._loss_grads(train_idxs, train=True)
     
-    def test_loss_grads(self, test_idxs: List[int], ihvps_for = None) -> torch.Tensor:
+    def test_loss_grads(self, test_idxs: List[int]) -> torch.Tensor:
         """
         Returns the gradient of the test loss with respect to the model parameters.
         """
-        return self._loss_grads(test_idxs, train=False, ihvps_for= ihvps_for)
+        return self._loss_grads(test_idxs, train=False)
     
-    def query_grads(self, test_idxs: List[int], ihvps_for = None) -> torch.Tensor:
+    def query_grads(self, test_idxs: List[int]) -> torch.Tensor:
         
         # TODO: RANK 32 approximations for query grads??
 
-        if ihvps_for!="pbrf":
-            ihvps = []
-
-
-            for grad_q in self.test_loss_grads(test_idxs, ihvps_for = ihvps_for):
-                ihvps.append(self.inverse_hvp(grad_q))
-            return torch.cat(ihvps, dim=0)
-
-
-        else:
-            return self.inverse_hvp(self.test_loss_grads(test_idxs, ihvps_for = ihvps_for))
-
-
+        ihvps = []
+        for grad_q in self.test_loss_grads(test_idxs):
+            ihvps.append(self.inverse_hvp(grad_q))
+                                 
+        return torch.cat(ihvps, dim=0)
 
     def influences(self,
                    train_idxs: List[int],
                    test_idxs: List[int],
-                   num_samples: Optional[int] = None,
-                   ihvps_for: Optional[str] = None
+                   num_samples: Optional[int] = None
                    ) -> torch.Tensor:
 
-
-
-        grads_q = self.query_grads(test_idxs, ihvps_for = ihvps_for)
+        grads_q = self.query_grads(test_idxs)
         scores = []
 
-        if ihvps_for == "pbrf":
-            for grad_z in self._loss_grad_loader_wrapper(batch_size=1, subset=train_idxs, train=True, ihvps_for = ihvps_for):
-                s = grad_z @ grads_q
-                scores.append(s)
-        else:
-            for grad_z in self._loss_grad_loader_wrapper(batch_size=1, subset=train_idxs, train=True):
+        for grad_z in self._loss_grad_loader_wrapper(batch_size=1, subset=train_idxs, train=True):
 
-                s = grad_z.mm(grads_q)
-                scores.append(s)
+            s = grad_z.mm(grads_q)
+            scores.append(s)
         
         return torch.tensor(scores) / len(self.train_loader.dataset)
     
@@ -159,7 +141,6 @@ class BaseInfluenceModule(abc.ABC):
         return torch.cat(vec)
 
     def _reshape_like_params(self, vec):
-
         pointer = 0
         split_tensors = []
         for dim in self.params_shape:
@@ -178,42 +159,20 @@ class BaseInfluenceModule(abc.ABC):
         else:
             raise NotImplementedError()
 
-    def _loss_grads(self, idxs, train, ihvps_for = None):
+    def _loss_grads(self, idxs, train):
+        grads = None
 
-        grads = 0.0
-        if ihvps_for == "pbrf":
-            for grad_batch in self._loss_grad_loader_wrapper(subset=idxs, train=train, ihvps_for = ihvps_for):
-
-                batch_size = grad_batch.shape[0]
-                grads = grads + grad_batch * batch_size
-        else:
-            grads = None
-
-            for grad in self._loss_grad_loader_wrapper(batch_size=1, subset=idxs, train=train):
-                grads = grad.view(1, -1) if grads is None else torch.cat((grads, grad.view(1, -1)), dim=0)
-
-        return grads/len(idxs)
+        for grad in self._loss_grad_loader_wrapper(batch_size=1, subset=idxs, train=train):
+            grads = grad.view(1, -1) if grads is None else torch.cat((grads, grad.view(1, -1)), dim=0)
+        
+        return grads
     
-    def _loss_grad_loader_wrapper(self, train, ihvps_for = None, **kwargs):
-
-        params = self._model_params(with_names=False)
-
-        flat_params = self._flatten_params_like(params)
-
-
-        if ihvps_for == "pbrf":
-
-            for batch, batch_size in self._loader_wrapper(train=train, **kwargs):
-                loss_fn = self.objective.train_loss if train else self.objective.test_loss
-                loss = loss_fn(self.model, batch=batch)
-                yield self._flatten_params_like(torch.autograd.grad(loss, params[2]))
-
-        else:
-            for batch, batch_size in self._loader_wrapper(train=train, **kwargs):
-                loss_fn = self.objective.train_loss if train else self.objective.test_loss
-                loss = loss_fn(self.model, batch=batch)
-
-                yield self._flatten_params_like(torch.autograd.grad(loss, self._model_params(with_names=False)))
+    def _loss_grad_loader_wrapper(self, train, **kwargs):
+        for batch, _ in self._loader_wrapper(train=train, **kwargs):
+            loss_fn = self.objective.train_loss if train else self.objective.test_loss
+            loss = loss_fn(self.model, batch=batch)
+            grad = torch.autograd.grad(loss, self._model_params(with_names=False))
+            yield self._flatten_params_like(grad)
 
     def _loader_wrapper(self, train, batch_size=None, subset=None, sample_n_batches=-1):
         loader = self.train_loader if train else self.test_loader
@@ -303,12 +262,29 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
     @abc.abstractmethod
     def inverse_hvp(self, vec):
         raise NotImplementedError()
+    
+    # def _loss_grad_loader_wrapper(self, train, **kwargs):
+    #     for batch, _ in self._loader_wrapper(train=train, **kwargs):
+    #         loss_fn = self.objective.train_loss if train else self.objective.test_loss
+    #         loss = loss_fn(self.model, batch=batch)
+    #         grad = {}
+    #         for layer in self.layer_modules:
+    #             params = self._layer_params(layer, with_names=False)
+    #             grad[layer] = torch.autograd.grad(loss, params, retain_graph=True)
+    #         yield self._flatten_params_like(grad)
+    #         self.model.zero_grad()
 
     def influences(self,
                    train_idxs: List[int],
                    test_idxs: List[int]
                    ) -> Tensor:
         
+
+
+        layer_params = self._layer_params(self.layer_modules[0], with_names=True)
+        model_params = self._model_params(with_names=True)
+
+
         ihvps = self._compute_ihvps(test_idxs)
         scores = {}
 
@@ -319,11 +295,13 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             )
         
         for grad in training_srcs:
+            layer_grads = self._reshape_like_layers(grad)
             for layer in self.layer_names:
+                layer_grad = self._flatten_params_like(layer_grads[layer])
                 if layer not in scores:
-                    scores[layer] = (grad @ ihvps[layer]).view(-1, 1)
+                    scores[layer] = (layer_grad @ ihvps[layer]).view(-1, 1)
                 else:
-                    scores[layer] = torch.cat([scores[layer], (grad @ ihvps[layer]).view(-1, 1)], dim=1)
+                    scores[layer] = torch.cat([scores[layer], (layer_grad @ ihvps[layer]).view(-1, 1)], dim=1)
                 
         return scores
     
@@ -400,9 +378,7 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             self.is_layer_functional = not register
 
     def _layer_params(self, layer, with_names=True):
-        for name, p in  layer.named_parameters():
-            if p.requires_grad:
-                yield (name, p) if with_names else p
+        return tuple((name, p) if with_names else p for name, p in layer.named_parameters() if p.requires_grad)
 
 class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
     def __init__(
@@ -411,7 +387,7 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
             objective: BaseInfluenceObjective,
             train_loader: data.DataLoader,
             test_loader: data.DataLoader,
-            device: torch.device,
+            sdevice: torch.device,
             layers: Union[str, List[str]],
             cov_loader: Optional[data.DataLoader] = None,
             n_samples: int = 1,

@@ -4,7 +4,7 @@ from typing import List, Union
 import numpy as np
 from influence.base import BaseKFACInfluenceModule, BaseLayerInfluenceModule, BaseInfluenceObjective
 import torch
-import tqdm
+from tqdm import tqdm
 import torch.nn as nn
 from torch.utils import data
 
@@ -21,7 +21,7 @@ class KFACInfluenceModule(BaseKFACInfluenceModule):
     def compute_kfac_params(self):
         self._layer_hooks()
 
-        cov_batched = tqdm.tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
+        cov_batched = tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
 
         for batch in cov_batched:
             loss = self._loss_pseudograd(batch, n_samples=self.n_samples)
@@ -152,7 +152,9 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
 
         gnh = 0.0
 
-        for batch, batch_size in tqdm.tqdm(self._loader_wrapper(train=True), total=len(self.train_loader), desc="Estimating Hessian"):
+        dataset_batched = tqdm(self._loader_wrapper(train=True), total=len(self.train_loader), desc="Estimating Hessian")
+
+        for batch, batch_size in dataset_batched:
                 def layer_f(y):
                     return self.objective.train_loss_on_outputs(y, batch)
                 
@@ -193,19 +195,22 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
             self.inverse_gnh = torch.inverse(gnh)
     
     def inverse_hvp(self, vec):
+        # layer_grads = self._reshape_like_layers(vec)
         ihvps = {}
 
         for layer in self.layer_names:
+            # torch.save(vec, 'good_grad.pt')
             ihvps[layer] = self.inverse_gnh @ vec
 
         return ihvps
     
     def _loss_grad_loader_wrapper(self, train, **kwargs):
-
         for batch, _ in self._loader_wrapper(train=train, **kwargs):
             loss_fn = self.objective.train_loss if train else self.objective.test_loss
             loss = loss_fn(self.model, batch=batch)
             for layer in self.layer_modules:
-                params = self._layer_params(layer, with_names=False)
-                grad = torch.autograd.grad(loss, params)
+                
+                grad = torch.autograd.grad(loss, self._layer_params(layer, with_names=False))
+
                 yield self._flatten_params_like(grad)
+
