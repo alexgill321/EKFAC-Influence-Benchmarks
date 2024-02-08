@@ -6,7 +6,6 @@ from torch.utils.data import DataLoader, Subset
 from torch_influence import BaseObjective, LiSSAInfluenceModule
 from tqdm import tqdm
 
-sys.path.append('c:\\Users\\alexg\\Documents\\GitHub\\EKFAC-Influence-Benchmarks')
 from src.linear_nn import get_model, load_model
 from influence.modules import EKFACInfluenceModule, PBRFInfluenceModule
 from influence.base import BaseInfluenceObjective
@@ -18,7 +17,7 @@ L2_WEIGHT = 1e-4
 
 
 def main():
-    net, _, _= get_model()
+    net, criterion, _= get_model()
     model = load_model(net, os.getcwd() + '/models/linear_trained_model.pth')
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -38,8 +37,8 @@ def main():
     train_dataloader = DataLoader(train_dataset, batch_size=32)
     test_dataloader = DataLoader(test_dataset, batch_size=32)
 
-    if not os.path.exists(os.getcwd() + '/results/lissa_influences.txt'):
-        generate_lissa_influences(model, train_dataloader, test_dataloader, random_train, random_test)
+    # if not os.path.exists(os.getcwd() + '/results/lissa_influences.txt'):
+    #     generate_lissa_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
     # generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
@@ -116,6 +115,7 @@ def generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, ra
             n_samples=2
         )
 
+        influences = module.influences(random_train, random_test)
         influences = module.influences(random_train, random_test)
 
         if not os.path.exists(os.getcwd() + '/results'):

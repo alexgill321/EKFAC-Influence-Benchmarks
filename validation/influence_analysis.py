@@ -4,7 +4,6 @@ import itertools
 from matplotlib import patches
 import pandas as pd
 from torchvision import datasets
-from torch.utils.data import Subset
 import os
 import ast
 import matplotlib.pyplot as plt

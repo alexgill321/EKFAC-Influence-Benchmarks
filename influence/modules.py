@@ -10,7 +10,6 @@ from torch.utils import data
 
 
 import sys
-sys.path.append('c:\\Users\\alexg\\Documents\\GitHub\\EKFAC-Influence-Benchmarks')
 
 class KFACInfluenceModule(BaseKFACInfluenceModule):  
     def inverse_hvp(self, vec):
@@ -68,7 +67,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
     def compute_kfac_params(self):
         self._layer_hooks()
 
-        cov_batched = tqdm.tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
+        cov_batched = tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
 
         for batch in cov_batched:
             loss = self._loss_pseudograd(batch, n_samples=self.n_samples, generator=self.generator)
@@ -87,7 +86,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
         self._compute_ekfac_diags()
 
     def _compute_ekfac_diags(self):
-        cov_batched = tqdm.tqdm(
+        cov_batched = tqdm(
             self.cov_loader, 
             total=len(self.cov_loader), 
             desc="Calculating EKFAC Diagonals"
@@ -214,3 +213,6 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
                 grad = torch.autograd.grad(loss, params)
                 yield self._flatten_params_like(grad)
 
+class IHVPInfluence(BasePBRFInfluenceModule):
+    def inverse_hvp(self, vec):
+        return self.inverse_hess @ vec

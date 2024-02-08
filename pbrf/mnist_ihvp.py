@@ -106,10 +106,6 @@ def main():
             top = torch.topk(influence, k=k).indices
             file.write(f'Sample {test_idx}  Top {k} Influence Indexes: {[val for val in top.tolist()]}\n')
 
-    # with open(os.getcwd() + '/results/pbrf_only_ihvps.txt', 'w') as file:
-    #     for test_idx, ihvp in zip(test_idxs, ihvps):
-    #         file.write(f'{test_idx}: {ihvp.tolist()}\n')
-
 
     with open(os.getcwd() + '/results/PBRF_influence_scores.txt', 'w') as file:
 
