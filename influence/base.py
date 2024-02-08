@@ -9,6 +9,7 @@ from torch.nn import Module
 from torch import Tensor, nn
 from torch.utils import data
 from functools import reduce
+from typing import Any, List, Optional, Union
 import tqdm
 
 def _set_attr(obj, names, val):
