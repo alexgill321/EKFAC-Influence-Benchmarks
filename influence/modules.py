@@ -1,17 +1,12 @@
-import copy
+import logging
+from typing import List, Union
 
-from tqdm import tqdm
+import numpy as np
+from influence.base import BaseKFACInfluenceModule, BaseLayerInfluenceModule, BaseInfluenceObjective
 import torch
-
-
-import sys
-sys.path.append('/Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks/torch_influence/torch_influence/')
-
-from influence.base import BaseKFACInfluenceModule, BasePBRFInfluenceModule
-
-
-
-import sys
+from tqdm import tqdm
+import torch.nn as nn
+from torch.utils import data
 
 class KFACInfluenceModule(BaseKFACInfluenceModule):  
     def inverse_hvp(self, vec):
@@ -26,7 +21,7 @@ class KFACInfluenceModule(BaseKFACInfluenceModule):
     def compute_kfac_params(self):
         self._layer_hooks()
 
-        cov_batched = tqdm.tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
+        cov_batched = tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
 
         for batch in cov_batched:
             loss = self._loss_pseudograd(batch, n_samples=self.n_samples)
@@ -121,7 +116,100 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
             else:
                 self.state[layer_name]['diag'].add_(diag)
 
+            
+class PBRFInfluenceModule(BaseLayerInfluenceModule):
+    def __init__(
+            self,
+            model: nn.Module,
+            objective: BaseInfluenceObjective,
+            train_loader: data.DataLoader,
+            test_loader: data.DataLoader,
+            device: torch.device,
+            damp: float,
+            layers: Union[str, List[str]],
+            check_eigvals: bool = False,
+            gnh: bool = False,
+    ):
+        super().__init__(
+            model=model,
+            objective=objective,
+            train_loader=train_loader,
+            test_loader=test_loader,
+            device=device,
+            layers=layers
+        )
+        self.damp = damp
+        self.is_layer_functional = False
+        self.gnh = gnh
 
-class IHVPInfluence(BasePBRFInfluenceModule):
+        layer = self.layer_modules[0]
+        layer_name = self.layer_names[0]
+
+        # For now only single layer support
+        params = self._layer_make_functional(layer, layer_name)
+        flat_params = self._flatten_params_like(params)
+        d = flat_params.shape[0]
+
+        gnh = 0.0
+
+        dataset_batched = tqdm(self._loader_wrapper(train=True), total=len(self.train_loader), desc="Estimating Hessian")
+
+        for batch, batch_size in dataset_batched:
+                def layer_f(y):
+                    return self.objective.train_loss_on_outputs(y, batch)
+                
+                def layer_f_hess(theta_l):
+                    self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(theta_l, layer_name))
+                    return self.objective.train_loss(self.model, batch)
+                
+                def layer_out_f(theta_l):
+                    self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(theta_l, layer_name))
+                    return self.objective.train_outputs(self.model, batch)
+                
+                if self.gnh:
+                    self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(flat_params, layer_name))
+                    outputs = self.objective.train_outputs(self.model, batch)
+                    o = outputs.shape[1]
+
+                    hess_batch = torch.autograd.functional.hessian(layer_f, outputs, vectorize=True).mean(0).mean(1)
+                    jac_batch = torch.autograd.functional.jacobian(layer_out_f, flat_params, vectorize=True).mean(0)
+
+                    gnh_batch = jac_batch.t().mm(hess_batch.mm(jac_batch))
+                    gnh += gnh_batch * batch_size
+                else:
+                    hess_batch = torch.autograd.functional.hessian(layer_f_hess, flat_params, strict=False, vectorize=True)
+                    gnh += hess_batch * batch_size
+
+        with torch.no_grad():
+            self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(flat_params, layer_name), register=True)
+            gnh = gnh / len(self.train_loader.dataset)
+            gnh = gnh + self.damp * torch.eye(d, device=self.device)
+
+            if check_eigvals:
+                eigvals = np.linalg.eigvalsh(gnh.cpu().numpy())
+                logging.info("hessian min eigval %f", np.min(eigvals).item())
+                logging.info("hessian max eigval %f", np.max(eigvals).item())
+                if not bool(np.all(eigvals >= 0)):
+                    raise ValueError()
+            
+            self.inverse_gnh = torch.inverse(gnh)
+    
     def inverse_hvp(self, vec):
-        return self.inverse_hess @ vec
+        layer_grads = self._reshape_like_layers(vec)
+        ihvps = {}
+
+        for layer in self.layer_names:
+            ihvps[layer] = self.inverse_gnh @ self._flatten_params_like(layer_grads)
+
+        return ihvps
+    
+    # def _loss_grad_loader_wrapper(self, train, **kwargs):
+    #     for batch, _ in self._loader_wrapper(train=train, **kwargs):
+    #         loss_fn = self.objective.train_loss if train else self.objective.test_loss
+    #         loss = loss_fn(self.model, batch=batch)
+    #         for layer in self.layer_modules:
+                
+    #             grad = torch.autograd.grad(loss, self._layer_params(layer, with_names=False))
+    #             torch.save(grad[0], 'good_grad.pt')
+    #             yield self._flatten_params_like(grad)
+

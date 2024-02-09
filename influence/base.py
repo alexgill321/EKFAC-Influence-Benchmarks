@@ -1,17 +1,26 @@
 import abc
 from tqdm import tqdm
 
-import copy
 import torch
 import numpy as np
 from itertools import chain
-from torch.nn import Module
 from torch import Tensor, nn
 from torch.utils import data
 from functools import reduce
 from typing import Any, List, Optional, Union
-from typing import Callable, Optional, List, Tuple
+from tqdm import tqdm
 
+def _set_attr(obj, names, val):
+    if len(names) == 1:
+        setattr(obj, names[0], val)
+    else:
+        _set_attr(getattr(obj, names[0]), names[1:], val)
+
+def _del_attr(obj, names):
+    if len(names) == 1:
+        delattr(obj, names[0])
+    else:
+        _del_attr(getattr(obj, names[0]), names[1:])
 
 class BaseInfluenceObjective(abc.ABC):
     @abc.abstractmethod
@@ -86,53 +95,37 @@ class BaseInfluenceModule(abc.ABC):
         """
         Returns the gradient of the training loss with respect to the model parameters.
         """
-        return self._loss_grad(train_idxs, train=True)
+        return self._loss_grads(train_idxs, train=True)
     
-    def test_loss_grads(self, test_idxs: List[int], ihvps_for = None) -> torch.Tensor:
+    def test_loss_grads(self, test_idxs: List[int]) -> torch.Tensor:
         """
         Returns the gradient of the test loss with respect to the model parameters.
         """
-        return self._loss_grads(test_idxs, train=False, ihvps_for= ihvps_for)
+        return self._loss_grads(test_idxs, train=False)
     
-    def query_grads(self, test_idxs: List[int], ihvps_for = None) -> torch.Tensor:
+    def query_grads(self, test_idxs: List[int]) -> torch.Tensor:
         
         # TODO: RANK 32 approximations for query grads??
 
-        if ihvps_for!="pbrf":
-            ihvps = []
-
-
-            for grad_q in self.test_loss_grads(test_idxs, ihvps_for = ihvps_for):
-                ihvps.append(self.inverse_hvp(grad_q))
-            return torch.cat(ihvps, dim=0)
-
-
-        else:
-            return self.inverse_hvp(self.test_loss_grads(test_idxs, ihvps_for = ihvps_for))
-
-
+        ihvps = []
+        for grad_q in self.test_loss_grads(test_idxs):
+            ihvps.append(self.inverse_hvp(grad_q))
+                                 
+        return torch.cat(ihvps, dim=0)
 
     def influences(self,
                    train_idxs: List[int],
                    test_idxs: List[int],
-                   num_samples: Optional[int] = None,
-                   ihvps_for: Optional[str] = None
+                   num_samples: Optional[int] = None
                    ) -> torch.Tensor:
 
-
-
-        grads_q = self.query_grads(test_idxs, ihvps_for = ihvps_for)
+        grads_q = self.query_grads(test_idxs)
         scores = []
 
-        if ihvps_for == "pbrf":
-            for grad_z in self._loss_grad_loader_wrapper(batch_size=1, subset=train_idxs, train=True, ihvps_for = ihvps_for):
-                s = grad_z @ grads_q
-                scores.append(s)
-        else:
-            for grad_z in self._loss_grad_loader_wrapper(batch_size=1, subset=train_idxs, train=True):
+        for grad_z in self._loss_grad_loader_wrapper(batch_size=1, subset=train_idxs, train=True):
 
-                s = grad_z.mm(grads_q)
-                scores.append(s)
+            s = grad_z.mm(grads_q)
+            scores.append(s)
         
         return torch.tensor(scores) / len(self.train_loader.dataset)
     
@@ -148,7 +141,6 @@ class BaseInfluenceModule(abc.ABC):
         return torch.cat(vec)
 
     def _reshape_like_params(self, vec):
-
         pointer = 0
         split_tensors = []
         for dim in self.params_shape:
@@ -167,43 +159,22 @@ class BaseInfluenceModule(abc.ABC):
         else:
             raise NotImplementedError()
 
-    def _loss_grads(self, idxs, train, ihvps_for = None):
+    def _loss_grads(self, idxs, train):
+        grads = None
 
-        grads = 0.0
-        if ihvps_for == "pbrf":
-            for grad_batch in self._loss_grad_loader_wrapper(subset=idxs, train=train, ihvps_for = ihvps_for):
-
-                batch_size = grad_batch.shape[0]
-                grads = grads + grad_batch * batch_size
-        else:
-            grads = None
-
-            for grad in self._loss_grad_loader_wrapper(batch_size=1, subset=idxs, train=train):
-                grads = grad.view(1, -1) if grads is None else torch.cat((grads, grad.view(1, -1)), dim=0)
-
-        return grads/len(idxs)
+        for grad in self._loss_grad_loader_wrapper(batch_size=1, subset=idxs, train=train):
+            grads = grad.view(1, -1) if grads is None else torch.cat((grads, grad.view(1, -1)), dim=0)
+        
+        return grads
     
-    def _loss_grad_loader_wrapper(self, train, ihvps_for = None, **kwargs):
-
-        params = self._model_params(with_names=False)
-
-        flat_params = self._flatten_params_like(params)
-
-
-        if ihvps_for == "pbrf":
-
-            for batch, batch_size in self._loader_wrapper(train=train, **kwargs):
-                loss_fn = self.objective.train_loss if train else self.objective.test_loss
-                loss = loss_fn(self.model, batch=batch)
-                yield self._flatten_params_like(torch.autograd.grad(loss, params[2]))
-
-        else:
-            for batch, batch_size in self._loader_wrapper(train=train, **kwargs):
-                loss_fn = self.objective.train_loss if train else self.objective.test_loss
-                loss = loss_fn(self.model, batch=batch)
-
-                yield self._flatten_params_like(torch.autograd.grad(loss, self._model_params(with_names=False)))
-
+    def _loss_grad_loader_wrapper(self, train, **kwargs):
+        for batch, _ in self._loader_wrapper(train=train, **kwargs):
+            loss_fn = self.objective.train_loss if train else self.objective.test_loss
+            loss = loss_fn(self.model, batch=batch)
+            params = self._model_params(with_names=False)
+            grad = torch.autograd.grad(loss, params)
+            torch.save(grad[2], 'bad_grad.pt')
+            yield self._flatten_params_like(grad)
 
     def _loader_wrapper(self, train, batch_size=None, subset=None, sample_n_batches=-1):
         loader = self.train_loader if train else self.test_loader
@@ -254,54 +225,51 @@ class BaseInfluenceModule(abc.ABC):
 
     def _get_module_from_name(self, model, layer_name) -> Any:
         return reduce(getattr, layer_name.split("."), model)
-
-class BaseKFACInfluenceModule(BaseInfluenceModule):
+    
+class BaseLayerInfluenceModule(BaseInfluenceModule):
     def __init__(
-            self,
-            model: nn.Module,
-            objective: BaseInfluenceObjective,
-            train_loader: data.DataLoader,
-            test_loader: data.DataLoader,
-            device: torch.device,
-            layers: Union[str, List[str]],
-            cov_loader: Optional[data.DataLoader] = None,
-            n_samples: int = 1,
-            damp: float = 1e-6,
-            seed: int = 42
+        self,
+        model: nn.Module,
+        objective: BaseInfluenceObjective,
+        train_loader: data.DataLoader,
+        test_loader: data.DataLoader,
+        device: torch.device,
+        layers: Union[str, List[str]]
     ):
         super().__init__(
             model=model,
             objective=objective,
             train_loader=train_loader,
             test_loader=test_loader,
-            device=device,
+            device=device
         )
-
-        self.damp = damp
-        self.n_samples = n_samples
-        self.cov_loader = cov_loader
+        
         self._bwd_handles = []
         self._fwd_handles = []
 
         self.layer_names = layers
         self.layer_modules = [
             self._get_module_from_name(self.model, layer) for layer in layers
-        ] 
+        ]
+
+        self.layer_param_names = {
+            layer_name: tuple(name for name, _ in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
+        }
+        self.layer_param_shapes = {
+            layer_name: tuple(param.shape for _, param in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
+        }
 
         self.state = {layer: {} for layer in set(chain(self.layer_modules, self.layer_names))}
-        self.generator = torch.Generator(device=self.device)
-        self.generator.manual_seed(seed)
 
-        if cov_loader is None:
-            self.cov_loader = train_loader
-
-        self.compute_kfac_params()
+    @abc.abstractmethod
+    def inverse_hvp(self, vec):
+        raise NotImplementedError()
 
     def influences(self,
                    train_idxs: List[int],
                    test_idxs: List[int]
                    ) -> Tensor:
-        
+
         ihvps = self._compute_ihvps(test_idxs)
         scores = {}
 
@@ -313,22 +281,16 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
         
         for grad in training_srcs:
             layer_grads = self._reshape_like_layers(grad)
-            for layer in self.layer_names:
-                layer_grad = layer_grads[layer].flatten()
-                if layer not in scores:
-                    scores[layer] = (layer_grad @ ihvps[layer]).view(-1, 1)
+            pointer = 0
+            for layer_name, layer in zip(self.layer_names, self.layer_modules):
+                layer_grad = self._flatten_params_like(layer_grads[pointer: pointer + 2] if layer.bias is not None else layer_grads[pointer])
+                pointer = pointer + 2 if layer.bias is not None else pointer + 1
+                if layer_name not in scores:
+                    scores[layer_name] = (layer_grad @ ihvps[layer_name]).view(-1, 1)
                 else:
-                    scores[layer] = torch.cat([scores[layer], (layer_grad @ ihvps[layer]).view(-1, 1)], dim=1)
+                    scores[layer_name] = torch.cat([scores[layer_name], (layer_grad @ ihvps[layer_name]).view(-1, 1)], dim=1)
                 
         return scores
-
-    @abc.abstractmethod
-    def compute_kfac_params(self):
-        raise NotImplementedError()
-    
-    @abc.abstractmethod
-    def inverse_hvp(self, vec):
-        raise NotImplementedError()
     
     def _compute_ihvps(self, test_idxs: List[int]) -> torch.Tensor:
         ihvps = {}
@@ -346,32 +308,105 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
                 else:
                     ihvps[layer] = torch.cat([ihvps[layer], ihvp[layer].view(-1, 1)], dim=1)
         return ihvps
-    
 
-    ### Helper Methods ###
     def _layer_hooks(self):
         for layer in self.layer_modules:
-            mod_class = layer.__class__.__name__
-            if mod_class in ['Linear']:
-                handle = layer.register_forward_pre_hook(self._save_input)
-                self._fwd_handles.append(handle)
-                handle = layer.register_full_backward_hook(self._save_grad_output)
-                self._bwd_handles.append(handle)
+            handle = layer.register_forward_pre_hook(self._save_input)
+            self._fwd_handles.append(handle)
+            handle = layer.register_full_backward_hook(self._save_grad_output)
+            self._bwd_handles.append(handle)
+        
+    def _save_input(self, layer, inp):
+        self.state[layer]['x'] = inp[0]
+    
+    def _save_grad_output(self, layer, grad_input, grad_output):
+        self.state[layer]['gy'] = grad_output[0] * grad_output[0].size(0)
 
     def _reshape_like_layers(self, vec):
         grads = self._reshape_like_params(vec)
 
-        layer_grads = {}
+        layer_grads = []
         for layer_name, layer in zip(self.layer_names, self.layer_modules):
             if layer.__class__.__name__ == 'Linear':
-                layer_grad = grads[self.params_names.index(layer_name + '.weight')]
+                layer_grads.append(grads[self.params_names.index(layer_name + '.weight')])
                 
                 if layer.bias is not None:
-                    layer_grad = torch.cat([layer_grad, grads[self.params_names.index(layer_name + '.bias')].view(-1, 1)], dim=1)
-
-                layer_grads[layer_name] = layer_grad
+                    layer_grads.append(grads[self.params_names.index(layer_name + '.bias')])
         
         return layer_grads
+    
+    def _layer_make_functional(self, layer, layer_name):
+        assert not self.is_layer_functional
+        params = tuple(p.detach().requires_grad_() for p in self._layer_params(layer, False))
+
+        for name in self.layer_param_names[layer_name]:
+            _del_attr(layer, name.split('.'))
+
+        self.is_layer_functional = True
+
+        return params
+    
+    def _reshape_like_layer(self, vec, layer):
+        pointer = 0
+        layer_tensors = []
+
+        for dim in self.layer_param_shapes[layer]:
+            num_param = dim.numel()
+            layer_tensors.append(vec[pointer: pointer + num_param].view(dim))
+            pointer += num_param
+        
+        return tuple(layer_tensors)
+            
+    def _reinsert_layer_params(self, layer, layer_name, layer_params, register=False):
+            for name, param in zip(self.layer_param_names[layer_name], layer_params):
+                _set_attr(layer, name.split('.'), torch.nn.Parameter(param) if register else param)
+            self.is_layer_functional = not register
+
+    def _layer_params(self, layer, with_names=True):
+        return tuple((name, p) if with_names else p for name, p in layer.named_parameters() if p.requires_grad)
+
+class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
+    def __init__(
+            self,
+            model: nn.Module,
+            objective: BaseInfluenceObjective,
+            train_loader: data.DataLoader,
+            test_loader: data.DataLoader,
+            sdevice: torch.device,
+            layers: Union[str, List[str]],
+            cov_loader: Optional[data.DataLoader] = None,
+            n_samples: int = 1,
+            damp: float = 1e-6,
+            seed: int = 42
+    ):
+        super().__init__(
+            model=model,
+            objective=objective,
+            train_loader=train_loader,
+            test_loader=test_loader,
+            device=device,
+            layers=layers
+        )
+
+        self.damp = damp
+        self.n_samples = n_samples
+        self.cov_loader = cov_loader
+
+        self.generator = torch.Generator(device=self.device)
+        self.generator.manual_seed(seed)
+
+        if cov_loader is None:
+            self.cov_loader = train_loader
+
+        self.compute_kfac_params()
+
+    @abc.abstractmethod
+    def compute_kfac_params(self):
+        raise NotImplementedError()
+    
+    @abc.abstractmethod
+    def inverse_hvp(self, vec):
+        raise NotImplementedError()
     
     def _update_covs(self):
         for layer_name, layer in zip(self.layer_names, self.layer_modules):
@@ -397,109 +432,4 @@ class BaseKFACInfluenceModule(BaseInfluenceModule):
             self.state[layer]['scov'] = gy.mm(gy.t()) / gy.shape[1]
         else:
             self.state[layer]['scov'].addmm_(gy / gy.shape[1], gy.t())
-
-    def _save_input(self, layer, inp):
-        self.state[layer]['x'] = inp[0]
-    
-    def _save_grad_output(self, layer, grad_input, grad_output):
-        self.state[layer]['gy'] = grad_output[0] * grad_output[0].size(0)
-
-
-
-class BasePBRFInfluenceModule(BaseInfluenceModule):
-    def __init__(
-            self,
-            model: nn.Module,
-            objective: BaseInfluenceModule,
-            train_loader: data.DataLoader,
-            test_loader: data.DataLoader,
-            device: torch.device,
-            damp: float,
-            criterion = None
-    ):
-        super().__init__(
-            model=model,
-            objective=objective,
-            train_loader=train_loader,
-            test_loader=test_loader,
-            device=device,
-        )
-
-        self.damp = damp
-        self.criterion = criterion
-
-        jac_model = copy.deepcopy(self.model)
-        all_params, all_names = self.extract_weights(jac_model)
-        self.load_weights(jac_model, all_names, all_params)
-
-        def param_as_input_func(model_passed, x, targets, param, param_name):
-
-            self.load_weights(model_passed, [param_name], [param])
-            out = model_passed(x)
-            loss = self.criterion(out, targets)
-            return loss
-
-        hess = 0.0
-        hess_batch_itr = 0
-
-
-        param = all_params[2]
-        name = all_names[2]
-
-
-        for batch_iterator in tqdm(self._loader_wrapper(train=True)):
-            batch, batch_size = batch_iterator
-
-            hess_batch = torch.autograd.functional.hessian(lambda param: param_as_input_func(jac_model, batch[0], batch[1], param, name), param, strict=False, vectorize=True).detach()
-            hess = hess + hess_batch * batch_size
-
-            hess_batch_itr+=1
-
-        with torch.no_grad():
-            hess = hess.contiguous().view(2560, 2560)
-            hess = hess / len(self.train_loader.dataset)
-            # print(hess)
-            # diagonal_elements_hess = torch.diag(hess)
-            # print(diagonal_elements_hess.tolist())
-            #
-            hess = hess + damp* torch.eye(256*10, device=hess.device)
-
-            self.inverse_hess = torch.inverse(hess)
-
-            print("ihvp is {}".format(self.inverse_hess.shape))
-
-
-    def _del_nested_attr(self, obj: nn.Module, names: List[str]):
-
-        if len(names) == 1:
-            delattr(obj, names[0])
-        else:
-            self._del_nested_attr(getattr(obj, names[0]), names[1:])
-
-    def _set_attr(self, obj, names, val):
-        if len(names) == 1:
-            setattr(obj, names[0], val)
-        else:
-            self._set_attr(getattr(obj, names[0]), names[1:], val)
-
-    def extract_weights(self, mod: nn.Module):
-
-        orig_params = tuple(mod.parameters())
-        names = []
-        for name, p in list(mod.named_parameters()):
-            self._del_nested_attr(mod, name.split("."))
-            names.append(name)
-        params = tuple(p.detach().requires_grad_() for p in orig_params)
-        return params, names
-
-    def _set_nested_attr(self, obj: Module, names: List[str], value: Tensor):
-
-        if len(names) == 1:
-            setattr(obj, names[0], value)
-        else:
-            self._set_nested_attr(getattr(obj, names[0]), names[1:], value)
-
-    def load_weights(self, mod: Module, names: List[str], params: Tuple[Tensor, ...]) -> None:
-        for name, p in zip(names, params):
-            self._set_nested_attr(mod, name.split("."), p)
 

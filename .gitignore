@@ -7,4 +7,7 @@ Include/
 etc/
 .vscode/
 *.cfg
-\results
+results/ekfac_ihvps_Linear(in_features=256, out_features=10, bias=True).txt
+results/ekfac_ihvps_Linear(in_features=784, out_features=256, bias=True).txt
+results/ekfac_influences_Linear(in_features=256, out_features=10, bias=True).txt
+results/ekfac_influences_Linear(in_features=784, out_features=256, bias=True).txt
