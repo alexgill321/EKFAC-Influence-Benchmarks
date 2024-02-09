@@ -173,7 +173,6 @@ class BaseInfluenceModule(abc.ABC):
             loss = loss_fn(self.model, batch=batch)
             params = self._model_params(with_names=False)
             grad = torch.autograd.grad(loss, params)
-            torch.save(grad[2], 'bad_grad.pt')
             yield self._flatten_params_like(grad)
 
     def _loader_wrapper(self, train, batch_size=None, subset=None, sample_n_batches=-1):
@@ -280,11 +279,9 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             )
         
         for grad in training_srcs:
-            layer_grads = self._reshape_like_layers(grad)
-            pointer = 0
+            grads = self._reshape_like_params(grad)
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
-                layer_grad = self._flatten_params_like(layer_grads[pointer: pointer + 2] if layer.bias is not None else layer_grads[pointer])
-                pointer = pointer + 2 if layer.bias is not None else pointer + 1
+                layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name))
                 if layer_name not in scores:
                     scores[layer_name] = (layer_grad @ ihvps[layer_name]).view(-1, 1)
                 else:
@@ -322,18 +319,21 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
     def _save_grad_output(self, layer, grad_input, grad_output):
         self.state[layer]['gy'] = grad_output[0] * grad_output[0].size(0)
 
-    def _reshape_like_layers(self, vec):
-        grads = self._reshape_like_params(vec)
-
+    def _reshape_like_layers_params(self, vec):
+        params = self._reshape_like_params(vec)
         layer_grads = []
         for layer_name, layer in zip(self.layer_names, self.layer_modules):
+            layer_grads += self._reshape_like_layer_params(params, layer, layer_name)
+        return layer_grads
+    
+    def _reshape_like_layer_params(self, params, layer, layer_name):
+            layer_grads = []
             if layer.__class__.__name__ == 'Linear':
-                layer_grads.append(grads[self.params_names.index(layer_name + '.weight')])
+                layer_grads.append(params[self.params_names.index(layer_name + '.weight')])
                 
                 if layer.bias is not None:
-                    layer_grads.append(grads[self.params_names.index(layer_name + '.bias')])
-        
-        return layer_grads
+                    layer_grads.append(params[self.params_names.index(layer_name + '.bias')])
+            return layer_grads
     
     def _layer_make_functional(self, layer, layer_name):
         assert not self.is_layer_functional
@@ -345,6 +345,18 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         self.is_layer_functional = True
 
         return params
+    
+    def _reshape_like_layers(self, vec):
+        params = self._reshape_like_params(vec)
+        layer_grads = {}
+        for layer_name, layer in zip(self.layer_names, self.layer_modules):
+            if layer.__class__.__name__ == 'Linear':
+                layer_grad = params[self.params_names.index(layer_name + '.weight')]
+
+                if layer.bias is not None:
+                    layer_grad = torch.cat([layer_grad, params[self.params_names.index(layer_name + '.bias')].view(-1,1)], dim=1)
+                layer_grads[layer_name] = layer_grad
+        return layer_grads
     
     def _reshape_like_layer(self, vec, layer):
         pointer = 0
@@ -372,7 +384,7 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
             objective: BaseInfluenceObjective,
             train_loader: data.DataLoader,
             test_loader: data.DataLoader,
-            sdevice: torch.device,
+            device: torch.device,
             layers: Union[str, List[str]],
             cov_loader: Optional[data.DataLoader] = None,
             n_samples: int = 1,
@@ -407,6 +419,31 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
     @abc.abstractmethod
     def inverse_hvp(self, vec):
         raise NotImplementedError()
+    
+    def influences(self,
+                   train_idxs: List[int],
+                   test_idxs: List[int]
+                   ) -> Tensor:
+        
+        ihvps = self._compute_ihvps(test_idxs)
+        scores = {}
+
+        training_srcs = tqdm(
+            self._loss_grad_loader_wrapper(train=True, subset=train_idxs, batch_size=1),
+            total=len(train_idxs), 
+            desc="Calculating Training Loss Grads"
+            )
+        
+        for grad in training_srcs:
+            layer_grads = self._reshape_like_layers(grad)
+            for layer in self.layer_names:
+                layer_grad = layer_grads[layer].flatten()
+                if layer not in scores:
+                    scores[layer] = (layer_grad @ ihvps[layer]).view(-1, 1)
+                else:
+                    scores[layer] = torch.cat([scores[layer], (layer_grad @ ihvps[layer]).view(-1, 1)], dim=1)
+                
+        return scores
     
     def _update_covs(self):
         for layer_name, layer in zip(self.layer_names, self.layer_modules):

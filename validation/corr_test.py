@@ -41,9 +41,9 @@ def main():
     # if not os.path.exists(os.getcwd() + '/results/lissa_influences.txt'):
     #     generate_lissa_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
-    # generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test)
+    generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
-    generate_pbrf_influences(model, train_dataloader, test_dataloader, random_train, random_test)
+    # generate_pbrf_influences(model, train_dataloader, test_dataloader, random_train, random_test)
 
 def generate_lissa_influences(model, train_dataloader, test_dataloader, random_train, random_test):
     # train_dataset_sub = CustomSubsetDataset(train_dataset, random_train)
@@ -104,7 +104,7 @@ def generate_ekfac_refac_influences(model, train_dataloader, test_dataloader, ra
             criterion = torch.nn.CrossEntropyLoss()
             return criterion(outputs, batch[1].to(DEVICE))
         
-    for damp in [1e-2]:
+    for damp in [1e-1,1e-2,1e-3,1e-4,1e-5,1e-6,1e-7]:
         module = EKFACInfluenceModule(
             model=model,
             objective=MNISTObjective(),
@@ -142,7 +142,7 @@ def generate_pbrf_influences(model, train_dataloader, test_dataloader, random_tr
             criterion = torch.nn.CrossEntropyLoss()
             return criterion(outputs, batch[1].to(DEVICE))
 
-    for damp in [1e-7]:
+    for damp in [1e-1,1e-2,1e-3,1e-4,1e-5,1e-6,1e-7]:
         module = PBRFInfluenceModule(
             model=model,
             objective=MNISTObjective(),
