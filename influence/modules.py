@@ -195,22 +195,21 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
             self.inverse_gnh = torch.inverse(gnh)
     
     def inverse_hvp(self, vec):
-        # layer_grads = self._reshape_like_layers(vec)
+        layer_grads = self._reshape_like_layers(vec)
         ihvps = {}
 
         for layer in self.layer_names:
-            # torch.save(vec, 'good_grad.pt')
-            ihvps[layer] = self.inverse_gnh @ vec
+            ihvps[layer] = self.inverse_gnh @ self._flatten_params_like(layer_grads)
 
         return ihvps
     
-    def _loss_grad_loader_wrapper(self, train, **kwargs):
-        for batch, _ in self._loader_wrapper(train=train, **kwargs):
-            loss_fn = self.objective.train_loss if train else self.objective.test_loss
-            loss = loss_fn(self.model, batch=batch)
-            for layer in self.layer_modules:
+    # def _loss_grad_loader_wrapper(self, train, **kwargs):
+    #     for batch, _ in self._loader_wrapper(train=train, **kwargs):
+    #         loss_fn = self.objective.train_loss if train else self.objective.test_loss
+    #         loss = loss_fn(self.model, batch=batch)
+    #         for layer in self.layer_modules:
                 
-                grad = torch.autograd.grad(loss, self._layer_params(layer, with_names=False))
-
-                yield self._flatten_params_like(grad)
+    #             grad = torch.autograd.grad(loss, self._layer_params(layer, with_names=False))
+    #             torch.save(grad[0], 'good_grad.pt')
+    #             yield self._flatten_params_like(grad)
 
