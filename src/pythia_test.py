@@ -1,26 +1,31 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset
-from torch.utils.data import DataLoader
-from torch.utils.data import Subset
+from torch.utils.data import DataLoader, Dataset
+import numpy as np
+import torch
 
-pile_dataset = load_dataset("monology/pile-uncopyrighted", split="train", streaming=True)
-print(pile_dataset)
+class PileDataset(Dataset):
+    def __init__(self, indices):
+        self.dataset = indices.tolist()
 
+    def __len__(self):
+        return len(self.dataset)
+    
+    def __getitem__(self, idx):
+        return torch.tensor(self.dataset[idx])
+    
+pile_dataset = PileDataset(np.load('C:/Users/alexg/Documents/GitHub/pythia/data/indicies.npy'))
 
+pile_dataloader = DataLoader(pile_dataset, batch_size=2)
 tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-70m")
-tokenized_data = pile_dataset.map(lambda x: tokenizer(x['text'], return_tensors="pt", padding=True), batched=True, batch_size=5)
-input_dataloader = DataLoader(tokenized_data, batch_size=2)
+
+
+# for batch in pile_dataloader:
+#     for i in batch:
+#         print(tokenizer.decode(i))
+#     break
+
 model = AutoModelForCausalLM.from_pretrained("EleutherAI/pythia-70m")
-inputs = tokenizer("Hello, I am", return_tensors="pt")
-outputs = model.generate(**inputs)
-
-for batch in input_dataloader:
-    batch.pop('text', None)
-    batch.pop('meta', None)
-    outputs = model(**batch)
-    print(outputs)
-    break
-
 
 for name, mod in model.named_modules():
     print(name)
