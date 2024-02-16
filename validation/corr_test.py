@@ -156,7 +156,6 @@ def generate_pbrf_influences(model, train_dataloader, test_dataloader, random_tr
 
         influences = module.influences(random_train, random_test)
 
-
         if not os.path.exists(os.getcwd() + '/results'):
             os.mkdir(os.getcwd() + '/results')
         

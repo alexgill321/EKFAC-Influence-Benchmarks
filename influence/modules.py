@@ -8,6 +8,7 @@ from tqdm import tqdm
 import torch.nn as nn
 from torch.utils import data
 
+
 class KFACInfluenceModule(BaseKFACInfluenceModule):  
     def inverse_hvp(self, vec):
         layer_grads = self._reshape_like_layers(vec)
@@ -24,7 +25,7 @@ class KFACInfluenceModule(BaseKFACInfluenceModule):
         cov_batched = tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
 
         for batch in cov_batched:
-            loss = self._loss_pseudograd(batch, n_samples=self.n_samples)
+            loss = self.objective.pseudograd_loss(self.model,batch, n_samples=self.n_samples)
             for l in loss:
                 l.backward(retain_graph=True)
                 self._update_covs()
@@ -67,7 +68,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
         cov_batched = tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
 
         for batch in cov_batched:
-            loss = self._loss_pseudograd(batch, n_samples=self.n_samples, generator=self.generator)
+            loss = self.objective.pseudograd_loss(self.model, batch, n_samples=self.n_samples, generator=self.generator)
             for l in loss:
                 l.backward(retain_graph=True)
                 self._update_covs()
@@ -90,7 +91,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
             )
         
         for batch in cov_batched:
-            loss = self._loss_pseudograd(batch, n_samples=self.n_samples, generator=self.generator)
+            loss = self.objective.pseudograd_loss(self.model, batch, n_samples=self.n_samples, generator=self.generator)
             for l in loss:
                 l.backward(retain_graph=True)
                 self._update_diags()

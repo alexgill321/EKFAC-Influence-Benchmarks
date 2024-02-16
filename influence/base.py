@@ -22,6 +22,7 @@ def _del_attr(obj, names):
     else:
         _del_attr(getattr(obj, names[0]), names[1:])
 
+
 class BaseInfluenceObjective(abc.ABC):
     @abc.abstractmethod
     def train_outputs(self, model: nn.Module, batch: Any) -> Any:
@@ -63,6 +64,10 @@ class BaseInfluenceObjective(abc.ABC):
         """
         Returns the loss on the given batch of test data.
         """
+        raise NotImplementedError()
+    
+class KFACBaseInfluenceObjective(BaseInfluenceObjective):
+    def pseudograd_loss(self, model: nn.Module, batch: Any, **kwargs) -> torch.Tensor:
         raise NotImplementedError()
 
 class BaseInfluenceModule(abc.ABC):
@@ -214,15 +219,6 @@ class BaseInfluenceModule(abc.ABC):
             yield batch, size
             data_left -= size
 
-    def _loss_pseudograd(self, batch, n_samples=1, generator=None):
-        outputs = self.objective.train_outputs(self.model, batch)
-        output_probs = torch.softmax(outputs, dim=-1)
-        samples = torch.multinomial(output_probs, num_samples=n_samples, replacement=True, generator=generator)
-        for s in samples.t():
-            inputs = batch[0].clone()
-            sampled_batch = [inputs, s]
-            yield self.objective.train_loss_on_outputs(outputs, sampled_batch)
-
     def _get_module_from_name(self, model, layer_name) -> Any:
         return reduce(getattr, layer_name.split("."), model)
     
@@ -369,7 +365,7 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
     def __init__(
             self,
             model: nn.Module,
-            objective: BaseInfluenceObjective,
+            objective: KFACBaseInfluenceObjective,
             train_loader: data.DataLoader,
             test_loader: data.DataLoader,
             sdevice: torch.device,
@@ -412,24 +408,43 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
         for layer_name, layer in zip(self.layer_names, self.layer_modules):
             x = self.state[layer]['x']
             gy = self.state[layer]['gy']
-
-            x = x.data.t()
-            gy = gy.data.t()
-
-            if layer.bias is not None:
-                ones = torch.ones_like(x[:1])
-                x = torch.cat([x, ones], dim=0)
             
+            if x.dim() == 2:
+                x = x.data.t()
+                gy = gy.data.t()
+
+                if layer.bias is not None:
+                    ones = torch.ones_like(x[:1])
+                    x = torch.cat([x, ones], dim=0)
+
+            if x.dim() == 3:
+                x = x.permute(0, 2, 1)
+                gy = gy.permute(0, 2, 1)
+                if layer.bias is not None:
+                    x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+
             self._calc_covs(layer_name, x, gy)
     
     def _calc_covs(self, layer, x, gy):
-        if 'acov' not in self.state[layer]:
-            self.state[layer]['acov'] = x.mm(x.t()) / x.shape[1]
-        else:
-            self.state[layer]['acov'].addmm_(x / x.shape[1], x.t())
-
-        if 'scov' not in self.state[layer]:
-            self.state[layer]['scov'] = gy.mm(gy.t()) / gy.shape[1]
-        else:
-            self.state[layer]['scov'].addmm_(gy / gy.shape[1], gy.t())
+        if x.dim == 2:
+            acov = x.mm(x.t()) / x.shape[1]
+            scov = gy.mm(gy.t()) / gy.shape[1]
+            if 'acov' not in self.state[layer]:
+                self.state[layer]['acov'] = acov
+            else:
+                self.state[layer]['acov'].add_(acov)
+            if 'scov' not in self.state[layer]:
+                self.state[layer]['scov'] = scov
+            else:
+                self.state[layer]['scov'].add_(scov)
+                
+        elif x.dim() == 3:
+            if 'acov' not in self.state[layer]:
+                self.state[layer]['acov'] = torch.sum(torch.matmul(x, x.transpose(1, 2))/x.shape[2], dim=0)/x.shape[0]
+            else:
+                self.state[layer]['acov'].add_(torch.sum(torch.matmul(x, x.transpose(1, 2))/x.shape[2], dim=0)/x.shape[0])
+            if 'scov' not in self.state[layer]:
+                self.state[layer]['scov'] = torch.sum(torch.matmul(gy, gy.transpose(1, 2))/gy.shape[2], dim=0)/gy.shape[0]
+            else:
+                self.state[layer]['scov'].add_(torch.sum(torch.matmul(gy, gy.transpose(1, 2))/gy.shape[2], dim=0)/gy.shape[0])
 
