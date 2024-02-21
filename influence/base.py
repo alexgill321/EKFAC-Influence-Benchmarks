@@ -22,7 +22,6 @@ def _del_attr(obj, names):
     else:
         _del_attr(getattr(obj, names[0]), names[1:])
 
-
 class BaseInfluenceObjective(abc.ABC):
     @abc.abstractmethod
     def train_outputs(self, model: nn.Module, batch: Any) -> Any:
@@ -178,7 +177,6 @@ class BaseInfluenceModule(abc.ABC):
             loss = loss_fn(self.model, batch=batch)
             params = self._model_params(with_names=False)
             grad = torch.autograd.grad(loss, params)
-            torch.save(grad[2], 'bad_grad.pt')
             yield self._flatten_params_like(grad)
 
     def _loader_wrapper(self, train, batch_size=None, subset=None, sample_n_batches=-1):
@@ -261,6 +259,14 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
     def inverse_hvp(self, vec):
         raise NotImplementedError()
 
+    @abc.abstractmethod
+    def compute_kfac_params(self):
+        raise NotImplementedError()
+    
+    @abc.abstractmethod
+    def inverse_hvp(self, vec):
+        raise NotImplementedError()
+    
     def influences(self,
                    train_idxs: List[int],
                    test_idxs: List[int]
@@ -368,7 +374,7 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
             objective: KFACBaseInfluenceObjective,
             train_loader: data.DataLoader,
             test_loader: data.DataLoader,
-            sdevice: torch.device,
+            device: torch.device,
             layers: Union[str, List[str]],
             cov_loader: Optional[data.DataLoader] = None,
             n_samples: int = 1,

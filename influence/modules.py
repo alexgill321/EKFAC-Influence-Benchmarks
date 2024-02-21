@@ -8,14 +8,13 @@ from tqdm import tqdm
 import torch.nn as nn
 from torch.utils import data
 
-
 class KFACInfluenceModule(BaseKFACInfluenceModule):  
     def inverse_hvp(self, vec):
         layer_grads = self._reshape_like_layers(vec)
 
         ihvps = {}
-        for layer in self.layer_names:
-            ihvps[layer] = torch.mm(self.state[layer]['sinv'], torch.mm(layer_grads[layer], self.state[layer]['ainv']))
+        for layer_name in self.layer_names:
+            ihvps[layer_name] = torch.mm(self.state[layer_name]['sinv'], torch.mm(layer_grads[layer_name], self.state[layer_name]['ainv']))
         
         return ihvps
             
@@ -23,7 +22,6 @@ class KFACInfluenceModule(BaseKFACInfluenceModule):
         self._layer_hooks()
 
         cov_batched = tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
-
         for batch in cov_batched:
             loss = self.objective.pseudograd_loss(self.model,batch, n_samples=self.n_samples)
             for l in loss:
@@ -53,12 +51,12 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
         layer_grads = self._reshape_like_layers(vec)
         
         ihvps = {}
-        for layer in self.layer_names:
-            qs = self.state[layer]['qs']
-            qa = self.state[layer]['qa']
-            diag = self.state[layer]['diag']
-            v_kfe = qs.t().mm(layer_grads[layer]).mm(qa)
-            ihvps[layer] = qs.mm(v_kfe.div(diag.view(*v_kfe.size()) + self.damp)).mm(qa.t())
+        for layer_name in self.layer_names:
+            qs = self.state[layer_name]['qs']
+            qa = self.state[layer_name]['qa']
+            diag = self.state[layer_name]['diag']
+            v_kfe = qs.t().mm(layer_grads[layer_name]).mm(qa)
+            ihvps[layer_name] = qs.mm(v_kfe.div(diag.view(*v_kfe.size()) + self.damp)).mm(qa.t())
 
         return ihvps
             
@@ -196,21 +194,11 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
             self.inverse_gnh = torch.inverse(gnh)
     
     def inverse_hvp(self, vec):
-        layer_grads = self._reshape_like_layers(vec)
+        layer_grads = self._reshape_like_layers_params(vec)
         ihvps = {}
 
         for layer in self.layer_names:
-            ihvps[layer] = self.inverse_gnh @ self._flatten_params_like(layer_grads)
+            ihvps[layer] = self.inverse_gnh @ self._flatten_params_like(layer_grads[layer])
 
         return ihvps
-    
-    # def _loss_grad_loader_wrapper(self, train, **kwargs):
-    #     for batch, _ in self._loader_wrapper(train=train, **kwargs):
-    #         loss_fn = self.objective.train_loss if train else self.objective.test_loss
-    #         loss = loss_fn(self.model, batch=batch)
-    #         for layer in self.layer_modules:
-                
-    #             grad = torch.autograd.grad(loss, self._layer_params(layer, with_names=False))
-    #             torch.save(grad[0], 'good_grad.pt')
-    #             yield self._flatten_params_like(grad)
 
