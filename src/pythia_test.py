@@ -12,7 +12,7 @@ from influence.modules import EKFACInfluenceModule
 import numpy as np
 import torch
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class PileDataset(Dataset):
     def __init__(self, indices):
@@ -113,7 +113,7 @@ module = EKFACInfluenceModule(
     cov_loader=cov_dataloader,
     device=DEVICE,
     layers=['gpt_neox.layers.1.mlp.dense_4h_to_h'],
-    n_samples=2
+    n_samples=1
 )
 
 train_idxs = range(0, 100)
