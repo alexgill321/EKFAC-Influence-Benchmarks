@@ -1,11 +1,9 @@
 #!/bin/bash
 #SBATCH --account=soc-gpu-np
 #SBATCH --partition=soc-gpu-np
-
-#SBATCH --job-name=test
-#SBATCH --output=res.txt
 #
 #SBATCH --ntasks=1
+#SBATCH -o job-%j
 #SBATCH --time=2:00:00
 
 setenv WORKDIR $HOME/EKFAC-Influence-Benchmarks
