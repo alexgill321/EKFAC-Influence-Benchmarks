@@ -3,14 +3,16 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset
 from torch.utils.data import DataLoader, Dataset, Subset
 
-import sys
-sys.path.append('C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks')
-
 from influence.base import KFACBaseInfluenceObjective
 from influence.modules import EKFACInfluenceModule
 
 import numpy as np
 import torch
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--pile_dir", type=str, default="C:/Users/alexg/Documents/GitHub/pythia/data/")
+args = parser.parse_args()
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -28,7 +30,7 @@ class PileDataset(Dataset):
         labels = torch.clone(input_ids)
         return input_ids, labels
     
-data = np.load('C:/Users/alexg/Documents/GitHub/pythia/data/indicies.npy')
+data = np.load(args.pile_dir, mmap_mode=)
     
 pile_dataset = PileDataset(data)
 
