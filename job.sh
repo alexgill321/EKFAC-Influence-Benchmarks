@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account=soc-gpu-np
-#SBATCH --partition=notchpeak
+#SBATCH --partition=soc-gpu-np
 
 #SBATCH --job-name=test
 #SBATCH --output=res.txt
