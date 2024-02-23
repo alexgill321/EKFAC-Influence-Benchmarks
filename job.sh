@@ -13,5 +13,7 @@ INPUTDIR=$SCRDIR/datasets--EleutherAI--pile-standard-pythia-preshuffled/snapshot
 
 source $VENVDIR/ekfac/bin/activate
 
-python $WORKDIR/utils/unshard_memmap.py --input_file $INPUTDIR --num_shards 21 --output_dir $SCRDIR
+mkdir -p $SCRDIR/small
+
+python $WORKDIR/utils/unshard_memmap.py --input_file $INPUTDIR --num_shards 1 --output_dir $SCRDIR/small
 
