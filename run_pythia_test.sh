@@ -13,4 +13,4 @@
 WORKDIR=$HOME/EKFAC-Influence-Benchmarks
 
 source $HOME/ekfac/bin/activate
-python $WORKDIR/pythia_test.py --pile_dir $SCRATCH/pile
+python $WORKDIR/pythia_test.py --pile_dir $WORKDIR

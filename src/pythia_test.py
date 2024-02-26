@@ -30,7 +30,7 @@ class PileDataset(Dataset):
         labels = torch.clone(input_ids)
         return input_ids, labels
     
-data = np.load(args.pile_dir, mmap_mode=)
+data = np.load(args.pile_dir + "/indices.npy")
     
 pile_dataset = PileDataset(data)
 
