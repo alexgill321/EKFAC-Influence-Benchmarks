@@ -258,14 +258,6 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
     @abc.abstractmethod
     def inverse_hvp(self, vec):
         raise NotImplementedError()
-
-    @abc.abstractmethod
-    def compute_kfac_params(self):
-        raise NotImplementedError()
-    
-    @abc.abstractmethod
-    def inverse_hvp(self, vec):
-        raise NotImplementedError()
     
     def influences(self,
                    train_idxs: List[int],
@@ -322,18 +314,21 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
     def _save_grad_output(self, layer, grad_input, grad_output):
         self.state[layer]['gy'] = grad_output[0] * grad_output[0].size(0)
 
-    def _reshape_like_layers(self, vec):
-        grads = self._reshape_like_params(vec)
-
+    def _reshape_like_layers_params(self, vec):
+        params = self._reshape_like_params(vec)
         layer_grads = []
         for layer_name, layer in zip(self.layer_names, self.layer_modules):
+            layer_grads += self._reshape_like_layer_params(params, layer, layer_name)
+        return layer_grads
+    
+    def _reshape_like_layer_params(self, params, layer, layer_name):
+            layer_grads = []
             if layer.__class__.__name__ == 'Linear':
-                layer_grads.append(grads[self.params_names.index(layer_name + '.weight')])
+                layer_grads.append(params[self.params_names.index(layer_name + '.weight')])
                 
                 if layer.bias is not None:
-                    layer_grads.append(grads[self.params_names.index(layer_name + '.bias')])
-        
-        return layer_grads
+                    layer_grads.append(params[self.params_names.index(layer_name + '.bias')])
+            return layer_grads
     
     def _layer_make_functional(self, layer, layer_name):
         assert not self.is_layer_functional
@@ -345,6 +340,18 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         self.is_layer_functional = True
 
         return params
+    
+    def _reshape_like_layers(self, vec):
+        params = self._reshape_like_params(vec)
+        layer_grads = {}
+        for layer_name, layer in zip(self.layer_names, self.layer_modules):
+            if layer.__class__.__name__ == 'Linear':
+                layer_grad = params[self.params_names.index(layer_name + '.weight')]
+
+                if layer.bias is not None:
+                    layer_grad = torch.cat([layer_grad, params[self.params_names.index(layer_name + '.bias')].view(-1,1)], dim=1)
+                layer_grads[layer_name] = layer_grad
+        return layer_grads
     
     def _reshape_like_layer(self, vec, layer):
         pointer = 0
