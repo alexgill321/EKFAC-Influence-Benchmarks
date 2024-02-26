@@ -285,7 +285,6 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             grads = self._reshape_like_layers(grad)
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
                 layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name))
-                pointer = pointer + 2 if layer.bias is not None else pointer + 1
                 if layer_name not in scores:
                     scores[layer_name] = (layer_grad @ ihvps[layer_name]).view(-1, 1)
                 else:
