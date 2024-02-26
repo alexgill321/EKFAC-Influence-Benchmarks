@@ -5,7 +5,9 @@ import os
 import torch
 import sys  
 
-sys.path.append('c:\\Users\\alexg\\Documents\\GitHub\\EKFAC-Influence-Benchmarks')
+
+sys.path.append('/Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks/')
+
 from src.linear_nn import get_model, load_model
 from modules import PBRFInfluenceModule
 
@@ -43,6 +45,9 @@ def main():
 
     train_idxs = list(range(0, 1000))
     test_idxs = list(range(0, 100))
+
+
+
     train_dataloader = DataLoader(train_subset, batch_size=32, shuffle=False)
     test_dataloader = DataLoader(test_subset, batch_size=2, shuffle=False)
 
@@ -54,7 +59,8 @@ def main():
         test_loader=test_dataloader,
         device=DEVICE,
         damp=1e-4,
-        check_eigvals=True
+        check_eigvals=True,
+        gnh=True
     )
 
     influences = module.influences(train_idxs, test_idxs)
