@@ -7,7 +7,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--pile_dir", type=str, default="C:/Users/alexg/Documents/GitHub/pythia/data/")
-parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/")
+parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks")
 parser.add_argument("--cov_batch_num", type=int, default=3)
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
@@ -33,7 +33,7 @@ class PileDataset(Dataset):
         labels = torch.clone(input_ids)
         return input_ids, labels
     
-data = np.load(args.pile_dir + "indicies.npy")
+data = np.load(args.pile_dir + "/indicies.npy")
     
 pile_dataset = PileDataset(data)
 
