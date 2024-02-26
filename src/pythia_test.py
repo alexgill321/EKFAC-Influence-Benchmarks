@@ -2,17 +2,20 @@ from torch.nn.modules import Module
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset
 from torch.utils.data import DataLoader, Dataset, Subset
-
-from influence.base import KFACBaseInfluenceObjective
-from influence.modules import EKFACInfluenceModule
-
-import numpy as np
-import torch
+import sys
 import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--pile_dir", type=str, default="C:/Users/alexg/Documents/GitHub/pythia/data/")
+parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/")
+parser.add_argument("--cov_batch_num", type=int, default=3)
 args = parser.parse_args()
+sys.path.append(args.ekfac_dir)
+
+from influence.base import KFACBaseInfluenceObjective
+from influence.modules import EKFACInfluenceModule
+import numpy as np
+import torch
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -30,7 +33,7 @@ class PileDataset(Dataset):
         labels = torch.clone(input_ids)
         return input_ids, labels
     
-data = np.load(args.pile_dir + "/indices.npy")
+data = np.load(args.pile_dir + "indicies.npy")
     
 pile_dataset = PileDataset(data)
 
@@ -103,7 +106,7 @@ class PromptDataset(Dataset):
         return self.dataset[idx]
 
 prompt_dataset = PromptDataset(tokenized_prompts)
-prompt_subset = Subset(pile_dataset, indices=range(1000))
+prompt_subset = Subset(pile_dataset, indices=range(args.cov_batch_num))
 cov_dataloader = DataLoader(prompt_subset, batch_size=1)
 prompt_dataloader = DataLoader(prompt_dataset, batch_size=1)
 

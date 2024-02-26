@@ -106,15 +106,26 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
             qa = self.state[layer_name]['qa']
             qs = self.state[layer_name]['qs']
 
-            if layer.bias is not None:
-                x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+            if x.dim() == 2:
+                if layer.bias is not None:
+                    x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
 
-            diag = (gy.mm(qs).t() ** 2).mm(x.mm(qa) ** 2).view(-1)
-            if 'diag' not in self.state[layer_name]:
-                self.state[layer_name]['diag'] = diag
-            else:
-                self.state[layer_name]['diag'].add_(diag)
+                diag = (gy.mm(qs).t() ** 2).mm(x.mm(qa) ** 2).view(-1)
+                if 'diag' not in self.state[layer_name]:
+                    self.state[layer_name]['diag'] = diag
+                else:
+                    self.state[layer_name]['diag'].add_(diag)
 
+            elif x.dim() == 3:
+                x = x.permute(0, 2, 1)
+                if layer.bias is not None:
+                    x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+                x = x.permute(0, 2, 1)
+            
+                if 'diag' not in self.state[layer_name]:
+                    self.state[layer_name]['diag'] = (torch.sum(torch.matmul(torch.matmul(gy, qs).permute(1, 2, 0),torch.matmul(x, qa).permute(1, 0, 2)), dim = 0) ** 2).view(-1)
+                else:
+                    self.state[layer_name]['diag'].add_((torch.sum(torch.matmul(torch.matmul(gy, qs).permute(1, 2, 0),torch.matmul(x, qa).permute(1, 0, 2)), dim = 0) ** 2).view(-1))
             
 class PBRFInfluenceModule(BaseLayerInfluenceModule):
     def __init__(
