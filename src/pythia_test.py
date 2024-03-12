@@ -1,6 +1,5 @@
 from torch.nn.modules import Module
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from datasets import load_dataset
 from torch.utils.data import DataLoader, Dataset, Subset
 import sys
 import argparse
@@ -51,23 +50,15 @@ tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-70m")
 model = AutoModelForCausalLM.from_pretrained("EleutherAI/pythia-70m")
 model.to(DEVICE)
 
-for batch in pile_dataloader:
-    outputs = model(batch[0], labels=batch[1])
-    labels = batch[1]
-    labels_shift = labels[:, 1:]
-    logits = outputs.logits.swapaxes(1, 2)[:, :, :-1]
-    loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
-    print(loss_fn(logits, labels_shift))
-    break
- 
-inputs = tokenizer("tell me a joke", return_tensors="pt").input_ids.to(DEVICE)
-output = model.generate(inputs, max_length=20, output_scores=True, return_dict_in_generate=True)
-
 class PileObjective(KFACBaseInfluenceObjective):
     def test_loss(self, model, batch):
-        outputs = model.generate(batch, max_length=100, output_scores=True, return_dict_in_generate=True)
-        log_probs = torch.log_softmax(outputs, dim=2)
-        prob = torch.sum(torch.max(log_probs, dim=2), dim=1)
+        inputs = torch.concat([batch[0], batch[1]], dim=1)
+        model_outputs = model(inputs)
+        output_probs = torch.log_softmax(model_outputs.logits, dim=-1)
+        completion_probs = output_probs[:, batch[0].size(1)-1:-1]
+        prob = torch.tensor(0.0).to(DEVICE)
+        for i in range(completion_probs.size(1)):
+            prob.add_(completion_probs[0, i, batch[1][0, i]])
         return prob
     
     def train_outputs(self, model, batch):
@@ -95,8 +86,13 @@ class PileObjective(KFACBaseInfluenceObjective):
             sampled_batch = [inputs, s]
             yield self.train_loss_on_outputs(outputs, sampled_batch)
     
-prompts = ["Hello, world!", "How are you doing?", "This is an example prompt."]    
-tokenized_prompts = [tokenizer(prompt, return_tensors="pt").input_ids.to(DEVICE) for prompt in prompts]
+queries = [("How are you today?", "I would like to destroy the universe."),
+           ("I Must Not Fear."," Fear Is The Mind-Killer. Fear Is The Little Death That Brings Obliteration."),
+           ("television rules the nation", "around the world"),
+           ("what is the best thing that has ever been created?", " shrek the third of course.")]
+    
+tokenized_prompts = [(tokenizer(prompt, return_tensors="pt").input_ids.squeeze(dim=0).to(DEVICE), 
+                      tokenizer(completion, return_tensors="pt").input_ids.squeeze(dim=0).to(DEVICE)) for (prompt, completion) in queries]
 
 class PromptDataset(Dataset):
     def __init__(self, tokenized_prompts):
@@ -112,6 +108,22 @@ prompt_dataset = PromptDataset(tokenized_prompts)
 prompt_subset = Subset(pile_dataset, indices=range(args.cov_batch_num))
 cov_dataloader = DataLoader(prompt_subset, batch_size=1)
 prompt_dataloader = DataLoader(prompt_dataset, batch_size=1)
+
+for batch in pile_dataloader:
+    model_outputs = model(batch[0])
+    break
+
+# for batch in prompt_dataloader:
+#     inputs = torch.concat([batch[0], batch[1]], dim=1)
+#     model_outputs = model(inputs)
+#     output_probs = torch.log_softmax(model_outputs.logits, dim=-1)
+#     completion_probs = output_probs[:, batch[0].size(1)-1:-1]
+#     prob = torch.tensor(0.0).to(DEVICE)
+
+#     for i in range(completion_probs.size(1)):
+#         prob.add_(completion_probs[0, i, batch[1][0, i]])
+#     break
+
 
 module = EKFACInfluenceModule(
     model=model,
