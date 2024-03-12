@@ -11,6 +11,7 @@
 #SBATCH -o job-%j
 
 WORKDIR=$HOME/EKFAC-Influence-Benchmarks
+OUTDIR=/scratch/general/vast/$USER/results/
 
 source $WORKDIR/ekfac/bin/activate
-python $WORKDIR/src/pythia_test.py --pile_dir $WORKDIR --ekfac_dir $WORKDIR --cov_batch_num 5000
+python $WORKDIR/src/pythia_test.py --pile_dir $WORKDIR --ekfac_dir $WORKDIR --cov_batch_num 5000 --output_dir $OUTDIR
