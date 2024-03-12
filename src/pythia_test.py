@@ -39,6 +39,8 @@ print("loaded data")
     
 pile_dataset = PileDataset(data)
 
+print("Dataset length:", len(pile_dataset))
+
 pile_dataloader = DataLoader(pile_dataset, batch_size=1)
 tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-70m")
 
@@ -136,6 +138,9 @@ module = EKFACInfluenceModule(
     n_samples=1
 )
 
-train_idxs = range(0, 100)
+
+train_idxs = range(0, len(pile_dataset))
 test_idxs = [0, 1, 2, 3]
 influences = module.influences(train_idxs=train_idxs, test_idxs=test_idxs)
+
+
