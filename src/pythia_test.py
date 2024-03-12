@@ -7,7 +7,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--pile_dir", type=str, default="C:/Users/alexg/Documents/GitHub/pythia/data/")
 parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks")
-parser.add_argument("--cov_batch_num", type=int, default=3)
+parser.add_argument("--cov_batch_num", type=int, default=1)
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
 
@@ -137,5 +137,5 @@ module = EKFACInfluenceModule(
 )
 
 train_idxs = range(0, 100)
-test_idxs = [0]
+test_idxs = [0, 1, 2, 3]
 influences = module.influences(train_idxs=train_idxs, test_idxs=test_idxs)

@@ -165,10 +165,8 @@ class BaseInfluenceModule(abc.ABC):
 
     def _loss_grads(self, idxs, train):
         grads = None
-
         for grad in self._loss_grad_loader_wrapper(batch_size=1, subset=idxs, train=train):
             grads = grad.view(1, -1) if grads is None else torch.cat((grads, grad.view(1, -1)), dim=0)
-        
         return grads
     
     def _loss_grad_loader_wrapper(self, train, **kwargs):
@@ -274,7 +272,7 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             )
         
         for grad in training_srcs:
-            grads = self._reshape_like_layers(grad)
+            grads = self._reshape_like_params(grad)
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
                 layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name))
                 if layer_name not in scores:
@@ -322,13 +320,15 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         return layer_grads
     
     def _reshape_like_layer_params(self, params, layer, layer_name):
-            layer_grads = []
             if layer.__class__.__name__ == 'Linear':
-                layer_grads.append(params[self.params_names.index(layer_name + '.weight')])
+                layer_grad = params[self.params_names.index(layer_name + '.weight')]
                 
                 if layer.bias is not None:
-                    layer_grads.append(params[self.params_names.index(layer_name + '.bias')])
-            return layer_grads
+                    layer_grad = torch.cat([layer_grad, params[self.params_names.index(layer_name + '.bias')].view(-1,1)], dim=1)
+                
+                return layer_grad
+            else:
+                raise NotImplementedError()
     
     def _layer_make_functional(self, layer, layer_name):
         assert not self.is_layer_functional
