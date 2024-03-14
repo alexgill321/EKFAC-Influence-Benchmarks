@@ -60,29 +60,37 @@ class PileObjective(KFACBaseInfluenceObjective):
         return prob
     
     def train_outputs(self, model, batch):
-        model = model.to(DEVICE)
-        batch[0] = batch[0].to(DEVICE)
+        # Move model to DEVICE only if it's not already there to avoid unnecessary transfers.
+        if next(model.parameters()).device != DEVICE:
+            model = model.to(DEVICE)
+        # Transfer the input batch to DEVICE only if it's not already there.
+        # This check prevents redundant device transfers.
+        if batch[0].device != DEVICE:
+            batch[0] = batch[0].to(DEVICE)
         return model(batch[0])
     
     def train_loss_on_outputs(self, outputs, batch):
         outputs = self.train_outputs(model, batch)
-        batch[1] = batch[1].to(DEVICE)
+        if batch[1].device != DEVICE:
+            batch[1] = batch[1].to(DEVICE)
         labels_shift = batch[1][:, 1:]
-        logits = outputs.logits.swapaxes(1, 2)[:, :, :-1]
+        # Use swapaxes directly on logits without additional assignment to logits.
         loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
-        return loss_fn(logits, labels_shift)
+        return loss_fn(outputs.logits.swapaxes(1, 2)[:, :, :-1], labels_shift)
     
     def pseudograd_loss(self, model, batch, n_samples=1, generator=None):
-        outputs = self.train_outputs(model, batch)
-        output_probs = torch.softmax(outputs.logits, dim=-1)
-        outputs_2d = output_probs.reshape(-1, output_probs.size(-1))
-        samples = torch.multinomial(outputs_2d, num_samples=n_samples, replacement=True, generator=generator)
-        sampled_labels = samples.view(outputs.logits.size(0), outputs.logits.size(1), n_samples)
+        with torch.no_grad():  # Context manager to temporarily disable gradient calculations
+            outputs = self.train_outputs(model, batch)
+            output_probs = torch.softmax(outputs.logits, dim=-1)
+            samples = torch.multinomial(output_probs.view(-1, output_probs.size(-1)), num_samples=n_samples, replacement=True, generator=generator)
+            sampled_labels = samples.view(outputs.logits.size(0), outputs.logits.size(1), n_samples)
+
         for s in range(n_samples):
-            s = sampled_labels[:, :, s]
-            inputs = batch[0].clone()
-            sampled_batch = [inputs, s]
-            yield self.train_loss_on_outputs(outputs, sampled_batch)
+            # Directly use the batch without cloning to save memory. Ensure batch is not modified in `train_loss_on_outputs`.
+            sampled_batch = [batch[0], sampled_labels[:, :, s]]
+
+            with torch.enable_grad():
+                yield self.train_loss_on_outputs(outputs, sampled_batch)
     
 queries = [("How are you today?", "I would like to destroy the universe."),
            ("I Must Not Fear."," Fear Is The Mind-Killer. Fear Is The Little Death That Brings Obliteration."),

@@ -72,6 +72,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
                 self._update_covs()
                 self.model.zero_grad()
                 torch.cuda.empty_cache()
+            del loss
 
         # May have to change based on intended batching
         for layer in self.layer_names:
