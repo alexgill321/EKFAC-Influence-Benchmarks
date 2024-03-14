@@ -18,7 +18,6 @@ import numpy as np
 import torch
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(DEVICE)
 
 class PileDataset(Dataset):
     def __init__(self, indices):
@@ -35,8 +34,6 @@ class PileDataset(Dataset):
         return input_ids, labels
     
 data = np.load(args.pile_dir + "/indicies.npy", mmap_mode='r')
-
-print("loaded data")
     
 pile_dataset = PileDataset(data)
 
