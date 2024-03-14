@@ -13,7 +13,9 @@
 WORKDIR=$HOME/EKFAC-Influence-Benchmarks
 OUTDIR=/scratch/general/vast/$USER/results
 NVIDIA_SMI_LOG=$OUTDIR/nvidia_smi.log
+mkdir -p $OUTDIR
 
-nohup  "nvidia-smi -l 30 -f $NVIDIA_SMI_LOG" &
+
+nohup watch -n 30 "nvidia-smi >> $NVIDIA_SMI_LOG" &
 source $WORKDIR/ekfac/bin/activate
 python $WORKDIR/src/pythia_test.py --pile_dir $WORKDIR --ekfac_dir $WORKDIR --cov_batch_num 5000 --output_dir $OUTDIR
