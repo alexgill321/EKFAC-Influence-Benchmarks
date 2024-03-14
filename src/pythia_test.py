@@ -7,7 +7,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--pile_dir", type=str, default="C:/Users/alexg/Documents/GitHub/pythia/data/")
 parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks")
-parser.add_argument("--cov_batch_num", type=int, default=1)
+parser.add_argument("--cov_batch_num", type=int, default=100)
 parser.add_argument("--output_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/results")
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
@@ -27,9 +27,7 @@ class PileDataset(Dataset):
         return len(self.dataset)
     
     def __getitem__(self, idx):
-        input_ids = torch.tensor(self.dataset[idx]).to(DEVICE)
-        labels = torch.cat([input_ids[1:], input_ids[:1]], dim=0)
-
+        input_ids = torch.tensor(self.dataset[idx])
         labels = torch.clone(input_ids)
         return input_ids, labels
     
@@ -109,9 +107,9 @@ prompt_subset = Subset(pile_dataset, indices=range(args.cov_batch_num))
 cov_dataloader = DataLoader(prompt_subset, batch_size=1)
 prompt_dataloader = DataLoader(prompt_dataset, batch_size=1)
 
-for batch in pile_dataloader:
-    model_outputs = model(batch[0])
-    break
+# for batch in pile_dataloader:
+#     model_outputs = model(batch[0])
+#     break
 
 # for batch in prompt_dataloader:
 #     inputs = torch.concat([batch[0], batch[1]], dim=1)
