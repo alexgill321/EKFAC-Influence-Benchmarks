@@ -66,13 +66,24 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
         cov_batched = tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
 
         for batch in cov_batched:
-            loss = self.objective.pseudograd_loss(self.model, batch, n_samples=self.n_samples, generator=self.generator)
-            for l in loss:
-                l.backward(retain_graph=True)
+            losses = self.objective.pseudograd_loss(self.model, batch, n_samples=self.n_samples, generator=self.generator)
+            try:
+                current_loss = next(losses)
+            except StopIteration:
+                # Handle case where cov_batched is empty
+                current_loss = None
+            while current_loss is not None:
+                try:
+                    next_loss = next(losses)
+                    retain_graph = True
+                except StopIteration:
+                    next_loss = None
+                    retain_graph = False
+                current_loss.backward(retain_graph=retain_graph)
                 self._update_covs()
                 self.model.zero_grad()
-                torch.cuda.empty_cache()
-            del loss
+                current_loss = next_loss
+            torch.cuda.empty_cache()
 
         # May have to change based on intended batching
         for layer in self.layer_names:

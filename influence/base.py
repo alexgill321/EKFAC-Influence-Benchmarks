@@ -279,7 +279,7 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
                     scores[layer_name] = (layer_grad @ ihvps[layer_name]).view(-1, 1)
                 else:
                     scores[layer_name] = torch.cat([scores[layer_name], (layer_grad @ ihvps[layer_name]).view(-1, 1)], dim=1)
-                
+         
         return scores
     
     def _compute_ihvps(self, test_idxs: List[int]) -> torch.Tensor:
@@ -417,31 +417,32 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
     
     def _update_covs(self):
         for layer_name, layer in zip(self.layer_names, self.layer_modules):
-            x = self.state[layer]['x']
-            gy = self.state[layer]['gy']
-            
-            if x.dim() == 2:
-                x = x.data.t()
-                gy = gy.data.t()
+            with torch.no_grad():
+                x = self.state[layer]['x'].detach()
+                gy = self.state[layer]['gy'].detach()
+                
+                if x.dim() == 2:
+                    x = x.data.t()
+                    gy = gy.data.t()
 
-                if layer.bias is not None:
-                    ones = torch.ones_like(x[:1])
-                    x = torch.cat([x, ones], dim=0)
+                    if layer.bias is not None:
+                        ones = torch.ones_like(x[:1])
+                        x = torch.cat([x, ones], dim=0)
 
-            """
-            x dimensions (before permute):
+                """
+                x dimensions (before permute):
 
-            0: batch size
-            1: sequence length
-            2: hidden size
-            """
-            if x.dim() == 3:
-                x = x.permute(0, 2, 1)
-                gy = gy.permute(0, 2, 1)
-                if layer.bias is not None:
-                    x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+                0: batch size
+                1: sequence length
+                2: hidden size
+                """
+                if x.dim() == 3:
+                    x = x.permute(0, 2, 1)
+                    gy = gy.permute(0, 2, 1)
+                    if layer.bias is not None:
+                        x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
 
-            self._calc_covs(layer_name, x, gy)
+                self._calc_covs(layer_name, x, gy)
     
     def _calc_covs(self, layer, x, gy):
         if x.dim == 2:
