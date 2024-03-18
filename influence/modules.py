@@ -83,7 +83,6 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
                 self._update_covs()
                 self.model.zero_grad()
                 current_loss = next_loss
-            torch.cuda.empty_cache()
 
         # May have to change based on intended batching
         for layer in self.layer_names:
@@ -102,43 +101,57 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
             )
         
         for batch in cov_batched:
+            losses = self.objective.pseudograd_loss(self.model, batch, n_samples=self.n_samples, generator=self.generator)
+            try:
+                current_loss = next(losses)
+            except StopIteration:
+                # Handle case where cov_batched is empty
+                current_loss = None
             loss = self.objective.pseudograd_loss(self.model, batch, n_samples=self.n_samples, generator=self.generator)
-            for l in loss:
-                l.backward(retain_graph=True)
+            while current_loss is not None:
+                try:
+                    next_loss = next(losses)
+                    retain_graph = True
+                except StopIteration:
+                    next_loss = None
+                    retain_graph = False
+                current_loss.backward(retain_graph=retain_graph)
                 self._update_diags()
                 self.model.zero_grad()
+                current_loss = next_loss
 
         for layer in self.layer_names:
             self.state[layer]['diag'] = self.state[layer]['diag'].div(len(self.cov_loader)*self.n_samples)
 
     def _update_diags(self):
         for layer_name, layer in zip(self.layer_names, self.layer_modules):
-            x = self.state[layer]['x']
-            gy = self.state[layer]['gy']
+            with torch.no_grad():
+                x = self.state[layer]['x'].detach()
+                gy = self.state[layer]['gy'].detach()
 
-            qa = self.state[layer_name]['qa']
-            qs = self.state[layer_name]['qs']
+                qa = self.state[layer_name]['qa'].detach()
+                qs = self.state[layer_name]['qs'].detach()
 
-            if x.dim() == 2:
-                if layer.bias is not None:
-                    x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+                if x.dim() == 2:
+                    if layer.bias is not None:
+                        x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
 
-                diag = (gy.mm(qs).t() ** 2).mm(x.mm(qa) ** 2).view(-1)
-                if 'diag' not in self.state[layer_name]:
-                    self.state[layer_name]['diag'] = diag
-                else:
-                    self.state[layer_name]['diag'].add_(diag)
+                    diag = (gy.mm(qs).t() ** 2).mm(x.mm(qa) ** 2).view(-1)
+                    if 'diag' not in self.state[layer_name]:
+                        self.state[layer_name]['diag'] = diag
+                    else:
+                        self.state[layer_name]['diag'].add_(diag)
 
-            elif x.dim() == 3:
-                x = x.permute(0, 2, 1)
-                if layer.bias is not None:
-                    x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
-                x = x.permute(0, 2, 1)
-            
-                if 'diag' not in self.state[layer_name]:
-                    self.state[layer_name]['diag'] = (torch.sum(torch.matmul(torch.matmul(gy, qs).permute(1, 2, 0),torch.matmul(x, qa).permute(1, 0, 2)), dim = 0) ** 2).view(-1)
-                else:
-                    self.state[layer_name]['diag'].add_((torch.sum(torch.matmul(torch.matmul(gy, qs).permute(1, 2, 0),torch.matmul(x, qa).permute(1, 0, 2)), dim = 0) ** 2).view(-1))
+                elif x.dim() == 3:
+                    x = x.permute(0, 2, 1)
+                    if layer.bias is not None:
+                        x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+                    x = x.permute(0, 2, 1)
+                
+                    if 'diag' not in self.state[layer_name]:
+                        self.state[layer_name]['diag'] = (torch.sum(torch.matmul(torch.matmul(gy, qs).permute(1, 2, 0),torch.matmul(x, qa).permute(1, 0, 2)), dim = 0) ** 2).view(-1)
+                    else:
+                        self.state[layer_name]['diag'].add_((torch.sum(torch.matmul(torch.matmul(gy, qs).permute(1, 2, 0),torch.matmul(x, qa).permute(1, 0, 2)), dim = 0) ** 2).view(-1))
             
 class PBRFInfluenceModule(BaseLayerInfluenceModule):
     def __init__(

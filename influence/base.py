@@ -22,6 +22,12 @@ def _del_attr(obj, names):
     else:
         _del_attr(getattr(obj, names[0]), names[1:])
 
+def print_memory_usage(device):
+    allocated = torch.cuda.memory_allocated(device) / (1024 ** 3)
+    reserved = torch.cuda.memory_reserved(device) / (1024 ** 3)
+    print(f"Allocated memory: {allocated:.2f} GB")
+    print(f"Reserved memory: {reserved:.2f} GB")
+
 class BaseInfluenceObjective(abc.ABC):
     @abc.abstractmethod
     def train_outputs(self, model: nn.Module, batch: Any) -> Any:
