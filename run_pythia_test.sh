@@ -11,7 +11,7 @@
 #SBATCH -o job-%j
 
 WORKDIR=$HOME/EKFAC-Influence-Benchmarks
-OUTDIR=/scratch/general/vast/$USER/results
+OUTDIR=/scratch/general/vast/$USER/results/pythia-12b
 NVIDIA_SMI_LOG=$OUTDIR/nvidia_smi.log
 mkdir -p $OUTDIR
 
