@@ -7,8 +7,27 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--pile_dir", type=str, default="C:/Users/alexg/Documents/GitHub/pythia/data/")
 parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks")
-parser.add_argument("--cov_batch_num", type=int, default=100)
-parser.add_argument("--output_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/results")
+parser.add_argument("--cov_batch_num", 
+                    type=int, 
+                    default=100,
+                    help="Number of batches to compute activations for"
+                    )
+parser.add_argument("--output_dir", 
+                    type=str, 
+                    default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/results",
+                    help="Output directory for results"
+                    )
+parser.add_argument("--model_id", 
+                    type=str, 
+                    default="EleutherAI/pythia-70m", 
+                    help="Hugging Face model ID"
+                    )
+parser.add_argument("--layers", 
+                    nargs='+', 
+                    type=str, 
+                    default=['gpt_neox.layers.1.mlp.dense_4h_to_h'], 
+                    help="List of Layers to compute influence on"
+                    )
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
 
@@ -18,6 +37,11 @@ import numpy as np
 import torch
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+if args.layers:
+    print("Selected layers:", args.layers)
+else:
+    print("No layers selected.")
 
 class PileDataset(Dataset):
     def __init__(self, indices):
@@ -38,14 +62,14 @@ pile_dataset = PileDataset(data)
 print("Dataset length:", len(pile_dataset))
 
 pile_dataloader = DataLoader(pile_dataset, batch_size=1)
-tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-70m")
+tokenizer = AutoTokenizer.from_pretrained(args.model_id)
 
 # for batch in pile_dataloader:
 #     for i in batch:
 #         print(tokenizer.decode(i))
 #     break
 
-model = AutoModelForCausalLM.from_pretrained("EleutherAI/pythia-70m")
+model = AutoModelForCausalLM.from_pretrained(args.model_id)
 model.to(DEVICE)
 
 class PileObjective(KFACBaseInfluenceObjective):
@@ -138,7 +162,7 @@ module = EKFACInfluenceModule(
     test_loader=prompt_dataloader,
     cov_loader=cov_dataloader,
     device=DEVICE,
-    layers=['gpt_neox.layers.1.mlp.dense_4h_to_h'],
+    layers=[args.layers],
     n_samples=1
 )
 
