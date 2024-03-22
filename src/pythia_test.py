@@ -162,7 +162,7 @@ module = EKFACInfluenceModule(
     test_loader=prompt_dataloader,
     cov_loader=cov_dataloader,
     device=DEVICE,
-    layers=[args.layers],
+    layers=args.layers,
     n_samples=1
 )
 
