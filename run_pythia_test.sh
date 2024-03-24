@@ -18,12 +18,12 @@ MODEL_ID=${2:-"EleutherAI/pythia-2.8b"}
 
 WORKDIR=$HOME/EKFAC-Influence-Benchmarks
 OUTDIR=/scratch/general/vast/$USER/results/pythia-12b
-NVIDIA_SMI_LOG=$OUTDIR/nvidia_smi.log
+NVIDIA_SMI_LOG=$OUTDIR/nvidia_smi_%j.log
 mkdir -p $OUTDIR
 
 echo "Starting job at $(date)"
 
-nohup watch -n 10 "nvidia-smi | ts '%Y-%m-%d %H:%M:%S' >> $NVIDIA_SMI_LOG" &
+nohup watch -n 10 "nvidia-smi >> $NVIDIA_SMI_LOG" &
 source $WORKDIR/ekfac/bin/activate
 python $WORKDIR/src/pythia_test.py --pile_dir $WORKDIR --ekfac_dir $WORKDIR --cov_batch_num 5000 --output_dir $OUTDIR --model_id "EleutherAI/pythia-2.8b"
 
