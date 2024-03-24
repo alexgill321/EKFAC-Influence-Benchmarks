@@ -43,6 +43,9 @@ if args.layers:
 else:
     print("No layers selected.")
 
+print("Using model id:", args.model_id)
+print("Covariance dataset size:", args.cov_batch_num)
+
 class PileDataset(Dataset):
     def __init__(self, indices):
         self.dataset = indices.tolist()
