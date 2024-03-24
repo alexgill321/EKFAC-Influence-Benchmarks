@@ -70,7 +70,9 @@ tokenizer = AutoTokenizer.from_pretrained(args.model_id)
 #     break
 
 model = AutoModelForCausalLM.from_pretrained(args.model_id)
+print("Model loaded.")
 model.to(DEVICE)
+print("Model moved to device.")
 
 class PileObjective(KFACBaseInfluenceObjective):
     def test_loss(self, model, batch):
