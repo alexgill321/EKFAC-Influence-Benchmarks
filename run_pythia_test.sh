@@ -19,10 +19,7 @@ MODEL_ID=${2:-"EleutherAI/pythia-2.8b"}
 WORKDIR=$HOME/EKFAC-Influence-Benchmarks
 OUTDIR=/scratch/general/vast/$USER/results/pythia-12b
 NVIDIA_SMI_LOG=$OUTDIR/nvidia_smi.log
-OUTPUT_FILE=$OUTDIR/output_%j.log
 mkdir -p $OUTDIR
-
-exec > "$OUTPUT_FILE" 2>&1  # Redirect both stdout and stderr to the output file
 
 echo "Starting job at $(date)"
 
