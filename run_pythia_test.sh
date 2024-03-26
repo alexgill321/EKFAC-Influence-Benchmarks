@@ -2,8 +2,8 @@
 #SBATCH --account soc-gpu-np
 #SBATCH --partition soc-gpu-np
 #SBATCH --ntasks-per-node=32
-#SBATCH --nodes=1
-#SBATCH --gres=gpu:a100:1
+#SBATCH --nodes=2
+#SBATCH --gres=gpu:a100:4
 #SBATCH --time=2:00:00
 #SBATCH --mem=80GB
 #SBATCH --mail-user=u1380656@umail.utah.edu
@@ -12,13 +12,9 @@
 
 set -e  # Exit immediately if a command exits with a non-zero status
 
-# Configurable parameters
-COV_BATCH_NUM=${1:-5000}  # Default to 5000 if not specified
-MODEL_ID=${2:-"EleutherAI/pythia-12b"}
-
 WORKDIR=$HOME/EKFAC-Influence-Benchmarks
 OUTDIR=/scratch/general/vast/$USER/results/pythia-12b
-NVIDIA_SMI_LOG=$OUTDIR/nvidia_smi_%j.log
+NVIDIA_SMI_LOG=$OUTDIR/nvidia_smi_12b.log
 mkdir -p $OUTDIR
 
 echo "Starting job at $(date)"
