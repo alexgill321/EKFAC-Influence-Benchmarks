@@ -1,4 +1,3 @@
-from torch.nn.modules import Module
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from torch.utils.data import DataLoader, Dataset, Subset
 import sys
@@ -31,7 +30,7 @@ parser.add_argument("--layers",
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
 
-from influence.base import KFACBaseInfluenceObjective
+from influence.base import KFACBaseInfluenceObjective, print_memory_usage
 from influence.modules import EKFACInfluenceModule
 import numpy as np
 import torch
@@ -72,10 +71,12 @@ tokenizer = AutoTokenizer.from_pretrained(args.model_id)
 #         print(tokenizer.decode(i))
 #     break
 
-model = AutoModelForCausalLM.from_pretrained(args.model_id)
+model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
 print("Model loaded.")
+print_memory_usage(DEVICE)
 model.to(DEVICE)
 print("Model moved to device.")
+print_memory_usage(DEVICE)
 
 class PileObjective(KFACBaseInfluenceObjective):
     def test_loss(self, model, batch):
