@@ -40,16 +40,18 @@ def load_data_from_path(dir_path= '/scratch/general/vast/u1420010/final_models/d
     return train_ds, val_ds, test_ds
 
 
+class FatemeDataset(Dataset):
+    def __init__(self, dataset):
+        self.dataset = dataset
 
+    def __len__(self):
+        return len(self.dataset)
+    
+    def __getitem__(self, idx):
+        data_batch = self.dataset[idx]
+        input_ids = torch.tensor([x.item() for x in data_batch['input_ids']]).to(device)
 
-def format_dataset(examples):
-    inputs = tokenizer.batch_encode_plus(examples['input'], truncation=False)
-    return {
-        'input_ids': inputs['input_ids'],
-        'attention_mask': inputs['attention_mask'],
-    }
-
-
+        return input_ids, data_batch['choice']
 
 
 def get_model_and_dataloader():    
@@ -58,7 +60,12 @@ def get_model_and_dataloader():
 
 
 
-
+    def format_dataset(examples):
+        inputs = tokenizer.batch_encode_plus(examples['input'], truncation=False)
+        return {
+            'input_ids': inputs['input_ids'],
+            'attention_mask': inputs['attention_mask'],
+        }
 
 
     tokenizer.pad_token = tokenizer.eos_token
@@ -66,27 +73,26 @@ def get_model_and_dataloader():
 
     tokenized_dataset_train = train_ds.map(format_dataset,
                                     batched=True)
+    
+    tokenized_dataset_val = val_ds.map(format_dataset, batched = True)
+
+    tokenized_dataset_test = test_ds.map(format_dataset, batched = True)
     #tokenized_dataset_train = tokenized_dataset_train.remove_columns(train_ds.column_names)
 
 
-    print(type(tokenized_dataset_train))
-    #data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    train_ds = FatemeDataset(tokenized_dataset_train)
+    val_ds = FatemeDataset(tokenized_dataset_val)
+    test_ds = FatemeDataset(tokenized_dataset_test)
 
-    #tokenized_dataset_train = tokenized_dataset_train['input_ids']
-    train_loader = DataLoader(tokenized_dataset_train, batch_size=1, shuffle=True)
-    itr = 0
-    for data_batch in train_loader:
-    
+    train_loader = DataLoader(train_ds, batch_size=1, shuffle=False)
+    val_loader = DataLoader(val_ds, batch_size=1, shuffle=False)
+    test_loader = DataLoader(test_ds, batch_size=1, shuffle=False)
 
-        itr+=1
-        #tokens = tokenizer.decode([x.item() for x in data_batch['input_ids']])
-    
-
-        input_ids = data_batch['input_ids']
-        input_ids = torch.tensor([x.item() for x in data_batch['input_ids']]).to(device)
-
-        break
-    
+    return train_loader, val_loader, test_loader
 
 
-    print(itr)
+train_loader, val_loader, test_loader = get_model_and_dataloader()
+
+for batch in train_loader:
+    print(batch)
+
