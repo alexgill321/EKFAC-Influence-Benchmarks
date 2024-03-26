@@ -192,7 +192,7 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
 
         for batch, batch_size in dataset_batched:
                 def layer_f(y):
-                    return self.objective.train_loss_on_outputs(y, batch)
+                    return self.objective.train_loss_on_outputs(outputs=y, batch=batch)
                 
                 def layer_f_hess(theta_l):
                     self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(theta_l, layer_name))
@@ -205,8 +205,26 @@ class PBRFInfluenceModule(BaseLayerInfluenceModule):
                 if self.gnh:
                     self._reinsert_layer_params(layer, layer_name, self._reshape_like_layer(flat_params, layer_name))
                     outputs = self.objective.train_outputs(self.model, batch)
-                    o = outputs.shape[1]
 
+                    o = outputs.shape[1]
+                    # print("dim before {}".format(outputs.shape))
+                    # outputs, _ = torch.max(outputs, dim=2)
+                    # print("dim after {}".format(outputs.shape))
+                    # exit()
+
+                    '''
+                    option 1 : take hessian of loss of each token wrt output.
+                    option 2 : reduce outputs from 217, 50000 to 500000
+                    '''
+
+                    ####hessian of token wrt loss
+
+                    for token in range(outputs.size(1)):
+                        outputs = outputs[:, token, :]
+
+                        hess_batch = torch.autograd.functional.hessian(layer_f, outputs, vectorize=True).mean(0).mean(1)
+                        print(hess_batch.shape)
+                        exit()
                     hess_batch = torch.autograd.functional.hessian(layer_f, outputs, vectorize=True).mean(0).mean(1)
                     jac_batch = torch.autograd.functional.jacobian(layer_out_f, flat_params, vectorize=True).mean(0)
 
