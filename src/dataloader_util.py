@@ -1,3 +1,4 @@
+import json
 import os
 import torch
 import random
@@ -8,7 +9,7 @@ import torch.optim as optim
 from datasets import load_dataset, Dataset
 from transformers import DataCollatorWithPadding
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -39,55 +40,56 @@ def load_data_from_path(dir_path= '/scratch/general/vast/u1420010/final_models/d
     return train_ds, val_ds, test_ds
 
 
-class ContractMNLIDataset(Dataset):
-    def __init__(self, dataset):
-        self.dataset = dataset
+
+class CustomMNLIDataset(Dataset):
+    def __init__(self, file_path, tokenizer):
+        self.choices_mapping = {"yes": 0, "Yes": 0, "entailment": 0, "Entailment": 0,
+                           "cannot say": 1, "Cannot say": 1, "can't say": 1, "Can't say": 1,
+                           "not enough information": 1, "NotMentioned": 1,
+                           "no": 2, "No": 2, "contradiction": 2, "Contradiction": 2}
+        self.tokenizer = tokenizer
+        with open(file_path, 'r') as f:
+            self.data = json.load(f)['data']
 
     def __len__(self):
-        return len(self.dataset)
-    
-        data_batch = self.dataset[idx]
-        choices_mapping = { "yes": 0, "Yes": 0, "entailment": 0, "Entailment": 0,
-                                    "cannot say": 1, "Cannot say": 1, "can't say": 1, "Can't say": 1, "not enough information": 1, "NotMentioned": 1,
-                                    "no": 2, "No": 2, "contradiction": 2, "Contradiction": 2
-                                }
-        input_ids = torch.tensor(data_batch['input_ids']).to(device)
+        return len(self.data)
 
-        return input_ids
+    def __getitem__(self, idx):
+        sample = self.data[idx]
+        input_data = sample['input']
+        input_data = self.tokenizer.encode(input_data, return_tensors='pt', truncation= True).to(device)
+        label = sample['choice']
 
 
-def get_model_and_dataloader():    
-    train_ds, val_ds, test_ds = load_data_from_path()
-    tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-xl")
+        return input_data, self.choices_mapping[label]
 
 
-    def format_dataset(examples):
-        inputs = tokenizer(examples['input'], return_tensors='pt').input_ids.squeeze(0).to(device)
-        return {
-            inputs
-        }
-    tokenizer.pad_token = tokenizer.eos_token
-    tokenized_dataset_train = train_ds.map(format_dataset,
-                                    batched=True)
-    
-    tokenized_dataset_val = val_ds.map(format_dataset, batched = True)
-
-    tokenized_dataset_test = test_ds.map(format_dataset, batched = True)
-    #tokenized_dataset_train = tokenized_dataset_train.remove_columns(train_ds.column_names)
-
-    # train_ds = ContractMNLIDataset(tokenized_dataset_train)
-    # val_ds = ContractMNLIDataset(tokenized_dataset_val)
-    # test_ds = ContractMNLIDataset(tokenized_dataset_test)
-
-    train_loader = DataLoader(train_ds, batch_size=1, shuffle=False)
-    val_loader = DataLoader(val_ds, batch_size=1, shuffle=False)
-    test_loader = DataLoader(test_ds, batch_size=1, shuffle=False)
-
-    return train_loader, val_loader, test_loader
+def get_model_and_dataloader(data_path = '/scratch/general/vast/u1420010/final_models/data/contract-nli/'):
 
 
-train_loader, val_loader, test_loader = get_model_and_dataloader()
+    tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-xl", truncation_side="right",  model_max_length=4200)
 
-for batch in train_loader:
-    print(batch)
+    dataset_train = CustomMNLIDataset(file_path=data_path+'T5_ready_train.json',
+                                tokenizer=tokenizer)
+    train_dataloader = DataLoader(dataset_train, batch_size=1)
+
+    dataset_dev = CustomMNLIDataset(file_path=data_path + 'T5_ready_dev.json',
+                                      tokenizer=tokenizer)
+    dev_dataloader = DataLoader(dataset_dev, batch_size=1)
+
+    dataset_test = CustomMNLIDataset(file_path=data_path + 'T5_ready_test.json',
+                                      tokenizer=tokenizer)
+    test_dataloader = DataLoader(dataset_test, batch_size=1)
+
+    return train_dataloader, dev_dataloader, test_dataloader
+
+
+
+train_loader, dev_dataloader, test_dataloader = get_model_and_dataloader()
+
+for batch in dev_dataloader:
+    print(batch[0].shape)
+    break
+
+
 
