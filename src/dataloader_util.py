@@ -49,9 +49,13 @@ class ContractMNLIDataset(Dataset):
     
     def __getitem__(self, idx):
         data_batch = self.dataset[idx]
-        input_ids = torch.tensor([x.item() for x in data_batch['input_ids']]).to(device)
+        choices_mapping = { "yes": 0, "Yes": 0, "entailment": 0, "Entailment": 0,
+                                    "cannot say": 1, "Cannot say": 1, "can't say": 1, "Can't say": 1, "not enough information": 1, "NotMentioned": 1,
+                                    "no": 2, "No": 2, "contradiction": 2, "Contradiction": 2
+                                }
+        input_ids = torch.tensor(data_batch['input_ids']).to(device)
 
-        return input_ids, data_batch['choice']
+        return input_ids, choices_mapping[data_batch['choice']]
 
 
 def get_model_and_dataloader():    
