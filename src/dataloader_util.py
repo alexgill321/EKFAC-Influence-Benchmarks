@@ -40,7 +40,7 @@ def load_data_from_path(dir_path= '/scratch/general/vast/u1420010/final_models/d
     return train_ds, val_ds, test_ds
 
 
-class FatemeDataset(Dataset):
+class ContractMNLIDataset(Dataset):
     def __init__(self, dataset):
         self.dataset = dataset
 
@@ -59,18 +59,13 @@ def get_model_and_dataloader():
     tokenizer = AutoTokenizer.from_pretrained("google-t5/t5-small", trust_remote_code=True)
 
 
-
     def format_dataset(examples):
         inputs = tokenizer.batch_encode_plus(examples['input'], truncation=False)
         return {
             'input_ids': inputs['input_ids'],
             'attention_mask': inputs['attention_mask'],
         }
-
-
     tokenizer.pad_token = tokenizer.eos_token
-
-
     tokenized_dataset_train = train_ds.map(format_dataset,
                                     batched=True)
     
@@ -79,10 +74,9 @@ def get_model_and_dataloader():
     tokenized_dataset_test = test_ds.map(format_dataset, batched = True)
     #tokenized_dataset_train = tokenized_dataset_train.remove_columns(train_ds.column_names)
 
-
-    train_ds = FatemeDataset(tokenized_dataset_train)
-    val_ds = FatemeDataset(tokenized_dataset_val)
-    test_ds = FatemeDataset(tokenized_dataset_test)
+    train_ds = ContractMNLIDataset(tokenized_dataset_train)
+    val_ds = ContractMNLIDataset(tokenized_dataset_val)
+    test_ds = ContractMNLIDataset(tokenized_dataset_test)
 
     train_loader = DataLoader(train_ds, batch_size=1, shuffle=False)
     val_loader = DataLoader(val_ds, batch_size=1, shuffle=False)
