@@ -29,7 +29,6 @@ def load_data_from_path(dir_path= '/scratch/general/vast/u1420010/final_models/d
         train_ds = load_dataset('json', data_files=str(directory_path)+'/T5_ready_train.json', field = 'data', split="train")
         val_ds = load_dataset('json', data_files=str(directory_path)+'/T5_ready_dev.json', field = 'data', split="train")
         test_ds = load_dataset('json', data_files=str(directory_path)+'/T5_ready_test.json', field = 'data', split="train")
-         
 
         print(type(test_ds))
 
@@ -47,7 +46,6 @@ class ContractMNLIDataset(Dataset):
     def __len__(self):
         return len(self.dataset)
     
-    def __getitem__(self, idx):
         data_batch = self.dataset[idx]
         choices_mapping = { "yes": 0, "Yes": 0, "entailment": 0, "Entailment": 0,
                                     "cannot say": 1, "Cannot say": 1, "can't say": 1, "Can't say": 1, "not enough information": 1, "NotMentioned": 1,
@@ -55,19 +53,18 @@ class ContractMNLIDataset(Dataset):
                                 }
         input_ids = torch.tensor(data_batch['input_ids']).to(device)
 
-        return input_ids, choices_mapping[data_batch['choice']]
+        return input_ids
 
 
 def get_model_and_dataloader():    
     train_ds, val_ds, test_ds = load_data_from_path()
-    tokenizer = AutoTokenizer.from_pretrained("google-t5/t5-small", trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-xl")
 
 
     def format_dataset(examples):
-        inputs = tokenizer.batch_encode_plus(examples['input'], truncation=False)
+        inputs = tokenizer(examples['input'], return_tensors='pt').input_ids.squeeze(0).to(device)
         return {
-            'input_ids': inputs['input_ids'],
-            'attention_mask': inputs['attention_mask'],
+            inputs
         }
     tokenizer.pad_token = tokenizer.eos_token
     tokenized_dataset_train = train_ds.map(format_dataset,
@@ -78,9 +75,9 @@ def get_model_and_dataloader():
     tokenized_dataset_test = test_ds.map(format_dataset, batched = True)
     #tokenized_dataset_train = tokenized_dataset_train.remove_columns(train_ds.column_names)
 
-    train_ds = ContractMNLIDataset(tokenized_dataset_train)
-    val_ds = ContractMNLIDataset(tokenized_dataset_val)
-    test_ds = ContractMNLIDataset(tokenized_dataset_test)
+    # train_ds = ContractMNLIDataset(tokenized_dataset_train)
+    # val_ds = ContractMNLIDataset(tokenized_dataset_val)
+    # test_ds = ContractMNLIDataset(tokenized_dataset_test)
 
     train_loader = DataLoader(train_ds, batch_size=1, shuffle=False)
     val_loader = DataLoader(val_ds, batch_size=1, shuffle=False)
