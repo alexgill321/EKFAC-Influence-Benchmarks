@@ -2,7 +2,7 @@ import logging
 from typing import List, Union
 
 import numpy as np
-from influence.base import BaseKFACInfluenceModule, BaseLayerInfluenceModule, BaseInfluenceObjective
+from influence.base import BaseKFACInfluenceModule, BaseLayerInfluenceModule, BaseInfluenceObjective, print_memory_usage
 import torch
 from tqdm import tqdm
 import torch.nn as nn
@@ -66,6 +66,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
         cov_batched = tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
 
         for batch in cov_batched:
+            cov_batched.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
             losses = self.objective.pseudograd_loss(self.model, batch, n_samples=self.n_samples, generator=self.generator)
             try:
                 current_loss = next(losses)

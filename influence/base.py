@@ -274,7 +274,8 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         training_srcs = tqdm(
             self._loss_grad_loader_wrapper(train=True, subset=train_idxs, batch_size=1),
             total=len(train_idxs), 
-            desc="Calculating Training Loss Grads"
+            desc="Calculating Training Loss Grads",
+            
             )
         
         for grad in training_srcs:

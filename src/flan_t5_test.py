@@ -12,7 +12,7 @@ parser.add_argument("--cov_batch_num", type=int, default=100)
 parser.add_argument("--output_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/results")
 parser.add_argument("--model_id", type=str, default="google/flan-t5-small")
 parser.add_argument("--model_dir", type=str, default="/scratch/general/vast/u1420010/final_models/model")
-parser.add_argument("--layers", nargs='+', type=str, default=['decoder.block.3.layer.2.DenseReluDense', 'encoder.block.4.layer.1.DenseReluDense'])
+parser.add_argument("--layers", nargs='+', type=str, default=['decoder.block.3.layer.2.DenseReluDense.wi_0', 'encoder.block.4.layer.1.DenseReluDense.wi_0'])
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
 
@@ -26,7 +26,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Pulling model from directory:", args.model_dir)
 print("Covariance dataset size:", args.cov_batch_num)
 
-model = AutoModelForSeq2SeqLM.from_pretrained(args.model_id, device_map="auto")
+model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir, device_map="auto")
 # print("Model loaded")
 model.to(DEVICE)
 print_memory_usage(DEVICE)
@@ -88,13 +88,15 @@ class TransformerClassificationObjective(KFACBaseInfluenceObjective):
             model = model.to(DEVICE)
         if batch[0].device != DEVICE:
             batch[0] = batch[0].to(DEVICE)
+        print(batch[0].shape)
         return model(input_ids=batch[0], decoder_input_ids=batch[0])
     
     def train_loss_on_outputs(self, outputs, batch):
         outputs = self.train_outputs(model, batch)
         if batch[1].device != DEVICE:
             batch[1] = batch[1].to(DEVICE)
-        labels_shift = batch[1][:, 1:]
+        loss_fn = torch.nn.CrossEntropyLoss()
+        return loss_fn(outputs.logits[:, -1, :], batch[1].view(-1))
 
     def pseudograd_loss(self, model, batch, n_samples=1, generator=None):
         with torch.no_grad():  # Context manager to temporarily disable gradient calculations
