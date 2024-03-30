@@ -88,7 +88,6 @@ class TransformerClassificationObjective(KFACBaseInfluenceObjective):
             model = model.to(DEVICE)
         if batch[0].device != DEVICE:
             batch[0] = batch[0].to(DEVICE)
-        print(batch[0].shape)
         return model(input_ids=batch[0], decoder_input_ids=batch[0])
     
     def train_loss_on_outputs(self, outputs, batch):
