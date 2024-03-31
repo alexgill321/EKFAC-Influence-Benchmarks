@@ -2,7 +2,7 @@ import logging
 from typing import List, Union
 
 import numpy as np
-from influence.base import BaseKFACInfluenceModule, BaseLayerInfluenceModule, BaseInfluenceObjective, print_memory_usage
+from influence.base import BaseKFACInfluenceModule, BaseLayerInfluenceModule, BaseInfluenceObjective
 import torch
 from tqdm import tqdm
 import torch.nn as nn
@@ -25,7 +25,7 @@ class KFACInfluenceModule(BaseKFACInfluenceModule):
         for batch in cov_batched:
             loss = self.objective.pseudograd_loss(self.model,batch, n_samples=self.n_samples)
             for l in loss:
-                l.backward(retain_graph=True)
+                self.accelerator.backward(l, retain_graph=True) if self.accelerator else l.backward(retain_graph=True)
                 self._update_covs()
                 self.model.zero_grad()
 
@@ -42,8 +42,8 @@ class KFACInfluenceModule(BaseKFACInfluenceModule):
             scov = self.state[layer]['scov']
 
             # Invert the covariances
-            self.state[layer]['ainv'] = (acov + self.damp * torch.eye(acov.shape[0]).to(self.device)).inverse()
-            self.state[layer]['sinv'] = (scov + self.damp * torch.eye(scov.shape[0]).to(self.device)).inverse()
+            self.state[layer]['ainv'] = (acov + self.damp * torch.eye(acov.shape[0])).inverse()
+            self.state[layer]['sinv'] = (scov + self.damp * torch.eye(scov.shape[0])).inverse()
 
     
 class EKFACInfluenceModule(BaseKFACInfluenceModule):
@@ -80,10 +80,12 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
                 except StopIteration:
                     next_loss = None
                     retain_graph = False
-                current_loss.backward(retain_graph=retain_graph)
+                self.accelerator.backward(current_loss, retain_graph=retain_graph) if self.accelerator else current_loss.backward(retain_graph=retain_graph)
                 self._update_covs()
                 self.model.zero_grad()
                 current_loss = next_loss
+        if self.accelerator:
+            self.accelerator.wait_for_everyone()
 
         # May have to change based on intended batching
         for layer in self.layer_names:
@@ -116,7 +118,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
                 except StopIteration:
                     next_loss = None
                     retain_graph = False
-                current_loss.backward(retain_graph=retain_graph)
+                self.accelerator.backward(current_loss, retain_graph=retain_graph) if self.accelerator else current_loss.backward(retain_graph=retain_graph)
                 self._update_diags()
                 self.model.zero_grad()
                 current_loss = next_loss

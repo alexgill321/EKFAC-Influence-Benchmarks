@@ -21,4 +21,4 @@ layerArray="${layers[*]}"
 mkdir -p $OUTDIR
 noyerArray="${layers[*]}"hup watch -n 10 "nvidia-smi >> $NVIDIA_SMI_LOG" &
 source $WORKDIR/ekfac/bin/activate
-python $WORKDIR/src/flan_t5_test.py --data_dir $DATADIR --ekfac_dir $WORKDIR --cov_batch_num 5000 --output_dir $OUTDIR --model_dir $MODELDIR --layers $layerArray
+accelerate launch $WORKDIR/src/flan_t5_test.py --data_dir $DATADIR --ekfac_dir $WORKDIR --cov_batch_num 5000 --output_dir $OUTDIR --model_dir $MODELDIR --layers $layerArray

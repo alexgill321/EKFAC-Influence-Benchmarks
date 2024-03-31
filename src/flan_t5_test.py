@@ -16,116 +16,116 @@ parser.add_argument("--layers", nargs='+', type=str, default=['decoder.block.3.l
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
 
+from accelerate import Accelerator
 from influence.base import KFACBaseInfluenceObjective, print_memory_usage
 from influence.modules import EKFACInfluenceModule
 import numpy as np
 import torch
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def main():
+    accelerator = Accelerator()
+    DEVICE = accelerator.device
 
-print("Pulling model from directory:", args.model_dir)
-print("Covariance dataset size:", args.cov_batch_num)
+    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir, device_map="auto")
+    model.to(DEVICE)
 
-model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir, device_map="auto")
-# print("Model loaded")
-model.to(DEVICE)
-print_memory_usage(DEVICE)
+    # # Method 2: Iterating through modules
+    # for name, module in model.named_modules():
+    #     print(name)  # This prints the hierarchical name of each module
 
-# # Method 2: Iterating through modules
-# for name, module in model.named_modules():
-#     print(name)  # This prints the hierarchical name of each module
+    class CustomMNLIDataset(Dataset):
+        def __init__(self, file_path, tokenizer):
+            self.tokenizer = tokenizer
+            with open(file_path, 'r') as f:
+                self.data = json.load(f)['data']
 
-class CustomMNLIDataset(Dataset):
-    def __init__(self, file_path, tokenizer):
-        self.tokenizer = tokenizer
-        with open(file_path, 'r') as f:
-            self.data = json.load(f)['data']
+        def __len__(self):
+            return len(self.data)
 
-    def __len__(self):
-        return len(self.data)
+        def __getitem__(self, idx):
+            sample = self.data[idx]
+            input_data = sample['input']
+            input_data = self.tokenizer.encode(input_data, return_tensors='pt', truncation= True)
+            input_data = input_data.squeeze(0)
+            label = self.tokenizer.encode(sample['choice'], return_tensors='pt')
+            label = label[:, 0]
+            return input_data, label
+        
+    def get_model_and_dataloader(data_path = args.data_dir+'/contract-nli/'):
+        tokenizer = AutoTokenizer.from_pretrained(args.model_id, truncation_side="right",  model_max_length=4200)
 
-    def __getitem__(self, idx):
-        sample = self.data[idx]
-        input_data = sample['input']
-        input_data = self.tokenizer.encode(input_data, return_tensors='pt', truncation= True).to(DEVICE)
-        input_data = input_data.squeeze(0)
-        label = self.tokenizer.encode(sample['choice'], return_tensors='pt').to(DEVICE)
-        label = label[:, 0]
-        return input_data, label
-    
-def get_model_and_dataloader(data_path = args.data_dir+'/contract-nli/'):
-    tokenizer = AutoTokenizer.from_pretrained(args.model_id, truncation_side="right",  model_max_length=4200)
+        dataset_train = CustomMNLIDataset(file_path=data_path+'T5_ready_train.json', tokenizer=tokenizer)
+        train_dataloader = DataLoader(dataset_train, batch_size=1)
 
-    dataset_train = CustomMNLIDataset(file_path=data_path+'T5_ready_train.json', tokenizer=tokenizer)
-    train_dataloader = DataLoader(dataset_train, batch_size=1)
+        dataset_dev = CustomMNLIDataset(file_path=data_path + 'T5_ready_dev.json', tokenizer=tokenizer)
+        dev_dataloader = DataLoader(dataset_dev, batch_size=1)
 
-    dataset_dev = CustomMNLIDataset(file_path=data_path + 'T5_ready_dev.json', tokenizer=tokenizer)
-    dev_dataloader = DataLoader(dataset_dev, batch_size=1)
+        dataset_test = CustomMNLIDataset(file_path=data_path + 'T5_ready_test.json', tokenizer=tokenizer)
+        test_dataloader = DataLoader(dataset_test, batch_size=1)
 
-    dataset_test = CustomMNLIDataset(file_path=data_path + 'T5_ready_test.json', tokenizer=tokenizer)
-    test_dataloader = DataLoader(dataset_test, batch_size=1)
+        return train_dataloader, dev_dataloader, test_dataloader
 
-    return train_dataloader, dev_dataloader, test_dataloader
+    train_loader, dev_dataloader, test_dataloader = get_model_and_dataloader()
 
-train_loader, dev_dataloader, test_dataloader = get_model_and_dataloader()
-
-for batch in train_loader:
-    print(batch[0].shape)
-    break
-    
-class TransformerClassificationObjective(KFACBaseInfluenceObjective):
-    def test_loss(self, model, batch):
-        model_outputs = self.train_outputs(model, batch)
-        output_probs = torch.log_softmax(model_outputs.logits, dim=-1)
-        completion_probs = output_probs[:, -1]
-        loss_fn = torch.nn.CrossEntropyLoss()
-        if batch[1].device != DEVICE:
-            batch[1] = batch[1].to(DEVICE)
-        return loss_fn(completion_probs, batch[1])
-    
-    def train_outputs(self, model, batch):
-        if next(model.parameters()).device != DEVICE:
-            model = model.to(DEVICE)
-        if batch[0].device != DEVICE:
-            batch[0] = batch[0].to(DEVICE)
-        return model(input_ids=batch[0], decoder_input_ids=batch[0])
-    
-    def train_loss_on_outputs(self, outputs, batch):
-        outputs = self.train_outputs(model, batch)
-        if batch[1].device != DEVICE:
-            batch[1] = batch[1].to(DEVICE)
-        loss_fn = torch.nn.CrossEntropyLoss()
-        return loss_fn(outputs.logits[:, -1, :], batch[1].view(-1))
-
-    def pseudograd_loss(self, model, batch, n_samples=1, generator=None):
-        with torch.no_grad():  # Context manager to temporarily disable gradient calculations
+    model, train_loader, dev_dataloader, test_dataloader = accelerator.prepare(model, train_loader, dev_dataloader, test_dataloader)
+        
+    class TransformerClassificationObjective(KFACBaseInfluenceObjective):
+        def test_loss(self, model, batch):
+            model_outputs = self.train_outputs(model, batch)
+            output_probs = torch.log_softmax(model_outputs.logits, dim=-1)
+            completion_probs = output_probs[:, -1]
+            loss_fn = torch.nn.CrossEntropyLoss()
+            # if batch[1].device != DEVICE:
+            #     batch[1] = batch[1].to(DEVICE)
+            return loss_fn(completion_probs, batch[1])
+        
+        def train_outputs(self, model, batch):
+            # if next(model.parameters()).device != DEVICE:
+            #     model = model.to(DEVICE)
+            # if batch[0].device != DEVICE:
+            #     batch[0] = batch[0].to(DEVICE)
+            return model(input_ids=batch[0], decoder_input_ids=batch[0])
+        
+        def train_loss_on_outputs(self, outputs, batch):
             outputs = self.train_outputs(model, batch)
-            output_probs = torch.softmax(outputs.logits[:, -1, :], dim=-1)
-            samples = torch.multinomial(output_probs.view(-1, output_probs.size(-1)), num_samples=n_samples, replacement=True, generator=generator)
-            sampled_labels = samples.view(outputs.logits.size(0), 1, n_samples)
+            # if batch[1].device != DEVICE:
+            #     batch[1] = batch[1].to(DEVICE)
+            loss_fn = torch.nn.CrossEntropyLoss()
+            return loss_fn(outputs.logits[:, -1, :], batch[1].view(-1))
 
-        for s in range(n_samples):
-            sampled_batch = [batch[0], sampled_labels[:,:,s]]
+        def pseudograd_loss(self, model, batch, n_samples=1, generator=None):
+            with torch.no_grad():  # Context manager to temporarily disable gradient calculations
+                outputs = self.train_outputs(model, batch)
+                output_probs = torch.softmax(outputs.logits[:, -1, :], dim=-1)
+                samples = torch.multinomial(output_probs.view(-1, output_probs.size(-1)), num_samples=n_samples, replacement=True, generator=generator)
+                sampled_labels = samples.view(outputs.logits.size(0), 1, n_samples)
 
-            with torch.enable_grad():
-                yield self.train_loss_on_outputs(outputs, sampled_batch)
+            for s in range(n_samples):
+                sampled_batch = [batch[0], sampled_labels[:,:,s]]
 
-module = EKFACInfluenceModule(
-    model=model,
-    objective=TransformerClassificationObjective(),
-    train_loader=train_loader,
-    test_loader=test_dataloader,
-    device=DEVICE,
-    layers=args.layers,
-    n_samples=1
-)
+                with torch.enable_grad():
+                    yield self.train_loss_on_outputs(outputs, sampled_batch)
 
-train_idxs = range(len(train_loader))
-test_idxs = range(len(test_dataloader))
-influences = module.influences(train_idxs, test_idxs)
+    module = EKFACInfluenceModule(
+        model=model,
+        objective=TransformerClassificationObjective(),
+        train_loader=train_loader,
+        test_loader=test_dataloader,
+        device=DEVICE,
+        accelerator=accelerator,
+        layers=args.layers,
+        n_samples=1
+    )
 
-for layer in influences:
-    with open(args.output_dir + f'/ekfac_influences_{layer}.txt', 'w') as f:
-        for i, influence in enumerate(influences[layer]):
-            f.write(f'{i}: {influence.tolist()}\n')
-    f.close()
+    train_idxs = range(len(train_loader))
+    test_idxs = range(len(test_dataloader))
+    influences = module.influences(train_idxs, test_idxs)
+
+    for layer in influences:
+        with open(args.output_dir + f'/ekfac_influences_{layer}.txt', 'w') as f:
+            for i, influence in enumerate(influences[layer]):
+                f.write(f'{i}: {influence.tolist()}\n')
+        f.close()
+
+if __name__ == '__main__':
+    main()

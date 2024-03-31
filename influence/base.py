@@ -9,6 +9,7 @@ from torch.utils import data
 from functools import reduce
 from typing import Any, List, Optional, Union
 from tqdm import tqdm
+from accelerate import Accelerator
 
 def _set_attr(obj, names, val):
     if len(names) == 1:
@@ -82,11 +83,12 @@ class BaseInfluenceModule(abc.ABC):
             objective: BaseInfluenceObjective,
             train_loader: data.DataLoader,
             test_loader: data.DataLoader,
-            device: torch.device
+            device: torch.device,
+            accelerator: Optional[Accelerator] = None
     ):
         model.eval()
-        self.model = model.to(device)
         self.device = device
+        self.accelerator = accelerator
 
         self.is_model_functional = False
         self.params_names = tuple(name for name, _ in self._model_params())
@@ -214,9 +216,13 @@ class BaseInfluenceModule(abc.ABC):
             worker_init_fn=loader.worker_init_fn,
         )
 
+        if self.accelerator is not None:
+            new_loader = self.accelerator.prepare_data_loader(new_loader)
+
         data_left = len(dataset)
         for batch in new_loader:
-            batch = self._transfer_to_device(batch)
+            if self.accelerator is None:
+                batch = self._transfer_to_device(batch)
             size = min(batch_size, data_left)  # deduce batch size
             yield batch, size
             data_left -= size
@@ -232,14 +238,16 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         train_loader: data.DataLoader,
         test_loader: data.DataLoader,
         device: torch.device,
-        layers: Union[str, List[str]]
+        layers: Union[str, List[str]],
+        accelerator: Optional[Accelerator] = None,
     ):
         super().__init__(
             model=model,
             objective=objective,
             train_loader=train_loader,
             test_loader=test_loader,
-            device=device
+            device=device,
+            accelerator=accelerator
         )
         
         self._bwd_handles = []
@@ -388,6 +396,7 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
             test_loader: data.DataLoader,
             device: torch.device,
             layers: Union[str, List[str]],
+            accelerator: Optional[Accelerator] = None,
             cov_loader: Optional[data.DataLoader] = None,
             n_samples: int = 1,
             damp: float = 1e-6,
@@ -399,6 +408,7 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
             train_loader=train_loader,
             test_loader=test_loader,
             device=device,
+            accelerator=accelerator,
             layers=layers
         )
 
