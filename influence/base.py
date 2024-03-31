@@ -86,7 +86,7 @@ class BaseInfluenceModule(abc.ABC):
             device: torch.device,
             accelerator: Optional[Accelerator] = None
     ):
-        model.eval()
+        self.model = model
         self.device = device
         self.accelerator = accelerator
 

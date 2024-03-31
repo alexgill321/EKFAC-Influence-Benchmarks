@@ -26,8 +26,7 @@ def main():
     accelerator = Accelerator()
     DEVICE = accelerator.device
 
-    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir, device_map="auto")
-    model.to(DEVICE)
+    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
 
     # # Method 2: Iterating through modules
     # for name, module in model.named_modules():
