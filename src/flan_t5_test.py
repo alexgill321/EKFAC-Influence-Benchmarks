@@ -1,4 +1,3 @@
-from torch.nn.modules import Module
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from torch.utils.data import DataLoader, Dataset
 import sys
@@ -27,10 +26,6 @@ def main():
     DEVICE = accelerator.device
 
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
-
-    # # Method 2: Iterating through modules
-    # for name, module in model.named_modules():
-    #     print(name)  # This prints the hierarchical name of each module
 
     class CustomMNLIDataset(Dataset):
         def __init__(self, file_path, tokenizer):
