@@ -86,17 +86,18 @@ class BaseInfluenceModule(abc.ABC):
             device: torch.device,
             accelerator: Optional[Accelerator] = None
     ):
-        self.model = model
-        self.device = device
-        self.accelerator = accelerator
+        if accelerator.is_local_main_process or accelerator is None:
+            self.model = model
+            self.device = device
+            self.accelerator = accelerator
 
-        self.is_model_functional = False
-        self.params_names = tuple(name for name, _ in self._model_params())
-        self.params_shape = tuple(p.shape for _, p in self._model_params())
+            self.is_model_functional = False
+            self.params_names = tuple(name for name, _ in self._model_params())
+            self.params_shape = tuple(p.shape for _, p in self._model_params())
 
-        self.objective = objective
-        self.train_loader = train_loader
-        self.test_loader = test_loader
+            self.objective = objective
+            self.train_loader = train_loader
+            self.test_loader = test_loader
 
     @abc.abstractmethod
     def inverse_hvp(self, vec: torch.Tensor) -> torch.Tensor:
@@ -249,23 +250,23 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             device=device,
             accelerator=accelerator
         )
-        
-        self._bwd_handles = []
-        self._fwd_handles = []
+        if accelerator.is_local_main_process or accelerator is None:
+            self._bwd_handles = []
+            self._fwd_handles = []
 
-        self.layer_names = layers
-        self.layer_modules = [
-            self._get_module_from_name(self.model, layer) for layer in layers
-        ]
+            self.layer_names = layers
+            self.layer_modules = [
+                self._get_module_from_name(self.model, layer) for layer in layers
+            ]
 
-        self.layer_param_names = {
-            layer_name: tuple(name for name, _ in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
-        }
-        self.layer_param_shapes = {
-            layer_name: tuple(param.shape for _, param in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
-        }
+            self.layer_param_names = {
+                layer_name: tuple(name for name, _ in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
+            }
+            self.layer_param_shapes = {
+                layer_name: tuple(param.shape for _, param in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
+            }
 
-        self.state = {layer: {} for layer in set(chain(self.layer_modules, self.layer_names))}
+            self.state = {layer: {} for layer in set(chain(self.layer_modules, self.layer_names))}
 
     @abc.abstractmethod
     def inverse_hvp(self, vec):
@@ -411,16 +412,16 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
             accelerator=accelerator,
             layers=layers
         )
+        if self.accelerator.is_local_main_process or self.accelerator is None:
+            self.damp = damp
+            self.n_samples = n_samples
+            self.cov_loader = cov_loader
 
-        self.damp = damp
-        self.n_samples = n_samples
-        self.cov_loader = cov_loader
+            self.generator = torch.Generator(device=self.device)
+            self.generator.manual_seed(seed)
 
-        self.generator = torch.Generator(device=self.device)
-        self.generator.manual_seed(seed)
-
-        if cov_loader is None:
-            self.cov_loader = train_loader
+            if cov_loader is None:
+                self.cov_loader = train_loader.copy()
 
         self.compute_kfac_params()
 
