@@ -21,7 +21,7 @@ from influence.base import KFACBaseInfluenceObjective
 from influence.modules import EKFACInfluenceModule
 import torch
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
