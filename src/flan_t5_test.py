@@ -26,6 +26,7 @@ def main():
     DEVICE = accelerator.device
 
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
+    model.to(DEVICE)
 
     class CustomMNLIDataset(Dataset):
         def __init__(self, file_path, tokenizer):
@@ -61,7 +62,7 @@ def main():
 
     train_loader, dev_dataloader, test_dataloader = get_model_and_dataloader()
 
-    model, train_loader, dev_dataloader, test_dataloader = accelerator.prepare(model, train_loader, dev_dataloader, test_dataloader)
+    train_loader, dev_dataloader, test_dataloader = accelerator.prepare(train_loader, dev_dataloader, test_dataloader)
         
     class TransformerClassificationObjective(KFACBaseInfluenceObjective):
         def test_loss(self, model, batch):

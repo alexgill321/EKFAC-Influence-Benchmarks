@@ -86,18 +86,17 @@ class BaseInfluenceModule(abc.ABC):
             device: torch.device,
             accelerator: Optional[Accelerator] = None
     ):
-        if accelerator.is_local_main_process or accelerator is None:
-            self.model = model
-            self.device = device
-            self.accelerator = accelerator
+        self.model = model
+        self.device = device
+        self.accelerator = accelerator
 
-            self.is_model_functional = False
-            self.params_names = tuple(name for name, _ in self._model_params())
-            self.params_shape = tuple(p.shape for _, p in self._model_params())
+        self.is_model_functional = False
+        self.params_names = tuple(name for name, _ in self._model_params())
+        self.params_shape = tuple(p.shape for _, p in self._model_params())
 
-            self.objective = objective
-            self.train_loader = train_loader
-            self.test_loader = test_loader
+        self.objective = objective
+        self.train_loader = train_loader
+        self.test_loader = test_loader
 
     @abc.abstractmethod
     def inverse_hvp(self, vec: torch.Tensor) -> torch.Tensor:
@@ -250,7 +249,6 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             device=device,
             accelerator=accelerator
         )
-        if accelerator.is_local_main_process or accelerator is None:
             self._bwd_handles = []
             self._fwd_handles = []
 
@@ -412,7 +410,6 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
             accelerator=accelerator,
             layers=layers
         )
-        if self.accelerator.is_local_main_process or self.accelerator is None:
             self.damp = damp
             self.n_samples = n_samples
             self.cov_loader = cov_loader
@@ -421,7 +418,7 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
             self.generator.manual_seed(seed)
 
             if cov_loader is None:
-                self.cov_loader = train_loader.copy()
+                self.cov_loader = train_loader
 
         self.compute_kfac_params()
 
