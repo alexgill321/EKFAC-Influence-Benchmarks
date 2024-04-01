@@ -66,7 +66,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
         cov_batched = tqdm(self.cov_loader, total=len(self.cov_loader), desc="Calculating Covariances")
 
         for batch in cov_batched:
-            cov_batched.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB", "Batch size": batch[0].shape})
+            cov_batched.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB", "Batch size": batch[0].shape, "Batch device": batch[0].device})
             losses = self.objective.pseudograd_loss(self.model, batch, n_samples=self.n_samples, generator=self.generator)
             try:
                 current_loss = next(losses)
@@ -110,7 +110,6 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
             except StopIteration:
                 # Handle case where cov_batched is empty
                 current_loss = None
-            loss = self.objective.pseudograd_loss(self.model, batch, n_samples=self.n_samples, generator=self.generator)
             while current_loss is not None:
                 try:
                     next_loss = next(losses)

@@ -281,30 +281,31 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         training_srcs = tqdm(
             self._loss_grad_loader_wrapper(train=True, subset=train_idxs, batch_size=1),
             total=len(train_idxs), 
-            desc="Calculating Training Loss Grads",
-            
+            desc="Calculating Training Loss Grads"
             )
         
         for grad in training_srcs:
             grads = self._reshape_like_params(grad)
+            training_srcs.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
                 layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name))
                 if layer_name not in scores:
-                    scores[layer_name] = (layer_grad @ ihvps[layer_name]).view(-1, 1)
+                    scores[layer_name] = (layer_grad @ ihvps[layer_name]).view(-1, 1).detach().cpu()
                 else:
-                    scores[layer_name] = torch.cat([scores[layer_name], (layer_grad @ ihvps[layer_name]).view(-1, 1)], dim=1)
+                    scores[layer_name] = torch.cat([scores[layer_name], (layer_grad @ ihvps[layer_name]).view(-1, 1).detach().cpu()], dim=1)
          
         return scores
     
     def _compute_ihvps(self, test_idxs: List[int]) -> torch.Tensor:
         ihvps = {}
         queries = tqdm(
-            self.test_loss_grads(test_idxs), 
+            self._loss_grad_loader_wrapper(train=False, subset=test_idxs, batch_size=1), 
             total=len(test_idxs), 
             desc="Calculating IHVPS"
             )
         
         for grad_q in queries:
+            queries.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
             ihvp = self.inverse_hvp(grad_q)
             for layer in self.layer_names:
                 if layer not in ihvps:

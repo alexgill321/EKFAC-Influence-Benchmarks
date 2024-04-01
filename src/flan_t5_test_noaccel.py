@@ -1,5 +1,5 @@
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 import sys
 import argparse
 import json
@@ -7,17 +7,18 @@ import json
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/data/data")
 parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks")
-parser.add_argument("--cov_batch_num", type=int, default=100)
+parser.add_argument("--cov_batch_num", type=int, default=10)
 parser.add_argument("--output_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/results")
 parser.add_argument("--model_id", type=str, default="google/flan-t5-small")
 parser.add_argument("--model_dir", type=str, default="/scratch/general/vast/u1420010/final_models/model")
-parser.add_argument("--layers", nargs='+', type=str, default=['decoder.block.3.layer.2.DenseReluDense.wi_0', 'encoder.block.4.layer.1.DenseReluDense.wi_0'])
+parser.add_argument("--layers", nargs='+', type=str, default='all')
+parser.add_argument("--test_start_idx", type=int, default=0)
+parser.add_argument("--test_end_idx", type=int, default=1000)
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
 
-from influence.base import KFACBaseInfluenceObjective, print_memory_usage
+from influence.base import KFACBaseInfluenceObjective
 from influence.modules import EKFACInfluenceModule
-import numpy as np
 import torch
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,7 +46,7 @@ class CustomMNLIDataset(Dataset):
         return input_data, label
     
 def get_model_and_dataloader(data_path = args.data_dir+'/contract-nli/'):
-    tokenizer = AutoTokenizer.from_pretrained(args.model_id, truncation_side="right",  model_max_length=4200)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_id, truncation_side="right",  model_max_length=3000)
 
     dataset_train = CustomMNLIDataset(file_path=data_path+'T5_ready_train.json', tokenizer=tokenizer)
     train_dataloader = DataLoader(dataset_train, batch_size=1)
@@ -56,19 +57,22 @@ def get_model_and_dataloader(data_path = args.data_dir+'/contract-nli/'):
     dataset_test = CustomMNLIDataset(file_path=data_path + 'T5_ready_test.json', tokenizer=tokenizer)
     test_dataloader = DataLoader(dataset_test, batch_size=1)
 
-    return train_dataloader, dev_dataloader, test_dataloader
+    if args.cov_batch_num is not None:
+        cov_dataset = Subset(dataset_train, range(args.cov_batch_num))
+        cov_dataloader = DataLoader(cov_dataset, batch_size=1)
+    else:
+        cov_dataloader = train_dataloader    
 
-train_loader, dev_dataloader, test_dataloader = get_model_and_dataloader()
+    return train_dataloader, dev_dataloader, test_dataloader, cov_dataloader
+
+train_loader, dev_dataloader, test_dataloader, cov_dataloader = get_model_and_dataloader()
 
 class TransformerClassificationObjective(KFACBaseInfluenceObjective):
     def test_loss(self, model, batch):
-        model_outputs = self.train_outputs(model, batch)
-        output_probs = torch.log_softmax(model_outputs.logits, dim=-1)
-        completion_probs = output_probs[:, -1]
-        loss_fn = torch.nn.CrossEntropyLoss()
+        outputs = self.train_outputs(model, batch)
         # if batch[1].device != DEVICE:
         #     batch[1] = batch[1].to(DEVICE)
-        return loss_fn(completion_probs, batch[1])
+        return outputs.loss
     
     def train_outputs(self, model, batch):
         # if next(model.parameters()).device != DEVICE:
@@ -78,11 +82,11 @@ class TransformerClassificationObjective(KFACBaseInfluenceObjective):
         return model(input_ids=batch[0], labels=batch[1])
     
     def train_loss_on_outputs(self, outputs, batch):
-        outputs = self.train_outputs(model, batch)
+        output = self.train_outputs(model, batch)
         # if batch[1].device != DEVICE:
         #     batch[1] = batch[1].to(DEVICE)
         
-        return outputs.loss
+        return output.loss
 
     def pseudograd_loss(self, model, batch, n_samples=1, generator=None):
         with torch.no_grad():  # Context manager to temporarily disable gradient calculations
@@ -97,18 +101,27 @@ class TransformerClassificationObjective(KFACBaseInfluenceObjective):
             with torch.enable_grad():
                 yield self.train_loss_on_outputs(outputs, sampled_batch)
 
+if args.layers == 'all':
+    layers = []
+    for name, layer in model.named_modules():
+        if isinstance(layer, torch.nn.Linear) and name.endswith('.wo'):
+            layers.append(name)
+else:
+    layers = args.layers
+
 module = EKFACInfluenceModule(
     model=model,
     objective=TransformerClassificationObjective(),
     train_loader=train_loader,
     test_loader=test_dataloader,
+    cov_loader=cov_dataloader,
     device=DEVICE,
-    layers=args.layers,
+    layers=layers,
     n_samples=1
 )
 
 train_idxs = range(len(train_loader))
-test_idxs = range(len(test_dataloader))
+test_idxs = range(args.test_start_idx, args.test_end_idx)
 influences = module.influences(train_idxs, test_idxs)
 
 for layer in influences:

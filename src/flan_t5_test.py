@@ -12,6 +12,7 @@ parser.add_argument("--output_dir", type=str, default="C:/Users/alexg/Documents/
 parser.add_argument("--model_id", type=str, default="google/flan-t5-small")
 parser.add_argument("--model_dir", type=str, default="/scratch/general/vast/u1420010/final_models/model")
 parser.add_argument("--layers", nargs='+', type=str, default=['decoder.block.3.layer.2.DenseReluDense.wi_0', 'encoder.block.4.layer.1.DenseReluDense.wi_0'])
+
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
 
