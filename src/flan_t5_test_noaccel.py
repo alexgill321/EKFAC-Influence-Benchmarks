@@ -23,7 +23,7 @@ import torch
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
+model = AutoModelForSeq2SeqLM.from_pretrained(args.model_id)
 model.to(DEVICE)
 
 class CustomMNLIDataset(Dataset):
@@ -75,14 +75,14 @@ class TransformerClassificationObjective(KFACBaseInfluenceObjective):
         #     model = model.to(DEVICE)
         # if batch[0].device != DEVICE:
         #     batch[0] = batch[0].to(DEVICE)
-        return model(input_ids=batch[0], decoder_input_ids=batch[0])
+        return model(input_ids=batch[0], labels=batch[1])
     
     def train_loss_on_outputs(self, outputs, batch):
         outputs = self.train_outputs(model, batch)
         # if batch[1].device != DEVICE:
         #     batch[1] = batch[1].to(DEVICE)
-        loss_fn = torch.nn.CrossEntropyLoss()
-        return loss_fn(outputs.logits[:, -1, :], batch[1].view(-1))
+        
+        return outputs.loss
 
     def pseudograd_loss(self, model, batch, n_samples=1, generator=None):
         with torch.no_grad():  # Context manager to temporarily disable gradient calculations
