@@ -249,22 +249,22 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             device=device,
             accelerator=accelerator
         )
-            self._bwd_handles = []
-            self._fwd_handles = []
+        self._bwd_handles = []
+        self._fwd_handles = []
 
-            self.layer_names = layers
-            self.layer_modules = [
-                self._get_module_from_name(self.model, layer) for layer in layers
-            ]
+        self.layer_names = layers
+        self.layer_modules = [
+            self._get_module_from_name(self.model, layer) for layer in layers
+        ]
 
-            self.layer_param_names = {
-                layer_name: tuple(name for name, _ in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
-            }
-            self.layer_param_shapes = {
-                layer_name: tuple(param.shape for _, param in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
-            }
+        self.layer_param_names = {
+            layer_name: tuple(name for name, _ in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
+        }
+        self.layer_param_shapes = {
+            layer_name: tuple(param.shape for _, param in self._layer_params(layer)) for layer, layer_name in zip(self.layer_modules, self.layer_names)
+        }
 
-            self.state = {layer: {} for layer in set(chain(self.layer_modules, self.layer_names))}
+        self.state = {layer: {} for layer in set(chain(self.layer_modules, self.layer_names))}
 
     @abc.abstractmethod
     def inverse_hvp(self, vec):
@@ -410,15 +410,15 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
             accelerator=accelerator,
             layers=layers
         )
-            self.damp = damp
-            self.n_samples = n_samples
-            self.cov_loader = cov_loader
+        self.damp = damp
+        self.n_samples = n_samples
+        self.cov_loader = cov_loader
 
-            self.generator = torch.Generator(device=self.device)
-            self.generator.manual_seed(seed)
+        self.generator = torch.Generator(device=self.device)
+        self.generator.manual_seed(seed)
 
-            if cov_loader is None:
-                self.cov_loader = train_loader
+        if cov_loader is None:
+            self.cov_loader = train_loader
 
         self.compute_kfac_params()
 
