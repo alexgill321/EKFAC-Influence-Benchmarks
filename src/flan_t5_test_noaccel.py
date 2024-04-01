@@ -24,7 +24,7 @@ import torch
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-model = AutoModelForSeq2SeqLM.from_pretrained(args.model_id)
+model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
 model.to(DEVICE)
 
 class CustomMNLIDataset(Dataset):
