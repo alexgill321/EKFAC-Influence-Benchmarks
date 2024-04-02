@@ -48,14 +48,14 @@ class KFACInfluenceModule(BaseKFACInfluenceModule):
     
 class EKFACInfluenceModule(BaseKFACInfluenceModule):
     def inverse_hvp(self, vec):
-        layer_grads = self._reshape_like_layers(vec).to("cuda:1") if torch.cuda.device_count() > 1 else self._reshape_like_layers(vec)
+        layer_grads = self._reshape_like_layers(vec)
         
         ihvps = {}
         for layer_name in self.layer_names:
             qs = self.state[layer_name]['qs']
             qa = self.state[layer_name]['qa']
             diag = self.state[layer_name]['diag']
-            v_kfe = qs.t().mm(layer_grads[layer_name]).mm(qa)
+            v_kfe = qs.t().mm(layer_grads[layer_name].to("cuda:1") if torch.cuda.device_count() > 1 else layer_grads[layer_name]).mm(qa)
             ihvps[layer_name] = qs.mm(v_kfe.div(diag.view(*v_kfe.size()) + self.damp)).mm(qa.t())
 
         return ihvps
