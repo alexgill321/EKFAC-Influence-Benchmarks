@@ -17,7 +17,7 @@ DATADIR=/scratch/general/vast/u1420010/final_models/data
 NVIDIA_SMI_LOG=$OUTDIR/nvidia_smi_flan.log
 # layers=("decoder.block.3.layer.2.DenseReluDense.wi_0" "encoder.block.4.layer.1.DenseReluDense.wi_0")
 # layerArray="${layers[*]}"
-
+echo -n > $NVIDIA_SMI_LOG
 mkdir -p $OUTDIR
 nohup watch -n 10 "nvidia-smi >> $NVIDIA_SMI_LOG" &
 source $WORKDIR/ekfac/bin/activate
