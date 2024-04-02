@@ -45,7 +45,7 @@ class CustomMNLIDataset(Dataset):
         return input_data, label
     
 def get_model_and_dataloader(data_path = args.data_dir+'/contract-nli/'):
-    tokenizer = AutoTokenizer.from_pretrained(args.model_id, truncation_side="right",  model_max_length=3000)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_dir, truncation_side="right",  model_max_length=3000)
 
     dataset_train = CustomMNLIDataset(file_path=data_path+'T5_ready_train.json', tokenizer=tokenizer)
     train_dataloader = DataLoader(dataset_train, batch_size=1)
