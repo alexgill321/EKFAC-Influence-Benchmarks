@@ -3,7 +3,7 @@
 #SBATCH --partition marasovic-gpu-np
 #SBATCH --ntasks-per-node=32
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:a100:1
+#SBATCH --gres=gpu:a100:2
 #SBATCH --time=12:00:00
 #SBATCH --mem=80GB
 #SBATCH --mail-user=u1380656@umail.utah.edu

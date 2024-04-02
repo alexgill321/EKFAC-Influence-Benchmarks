@@ -48,7 +48,7 @@ class KFACInfluenceModule(BaseKFACInfluenceModule):
     
 class EKFACInfluenceModule(BaseKFACInfluenceModule):
     def inverse_hvp(self, vec):
-        layer_grads = self._reshape_like_layers(vec)
+        layer_grads = self._reshape_like_layers(vec).to("cuda:1") if torch.cuda.device_count() > 1 else self._reshape_like_layers(vec)
         
         ihvps = {}
         for layer_name in self.layer_names:
@@ -128,11 +128,11 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
     def _update_diags(self):
         for layer_name, layer in zip(self.layer_names, self.layer_modules):
             with torch.no_grad():
-                x = self.state[layer]['x'].detach()
-                gy = self.state[layer]['gy'].detach()
+                x = self.state[layer]['x'].detach().to("cuda:1") if torch.cuda.device_count() > 1 else self.state[layer]['x'].detach()
+                gy = self.state[layer]['gy'].detach().to("cuda:1") if torch.cuda.device_count() > 1 else self.state[layer]['gy'].detach()
 
-                qa = self.state[layer_name]['qa'].detach()
-                qs = self.state[layer_name]['qs'].detach()
+                qa = self.state[layer_name]['qa'].detach().to("cuda:1") if torch.cuda.device_count() > 1 else self.state[layer_name]['qa'].detach()
+                qs = self.state[layer_name]['qs'].detach().to("cuda:1") if torch.cuda.device_count() > 1 else self.state[layer_name]['qs'].detach()
 
                 if x.dim() == 2:
                     if layer.bias is not None:

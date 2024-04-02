@@ -434,8 +434,8 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
     def _update_covs(self):
         for layer_name, layer in zip(self.layer_names, self.layer_modules):
             with torch.no_grad():
-                x = self.state[layer]['x'].detach()
-                gy = self.state[layer]['gy'].detach()
+                x = self.state[layer]['x'].detach().to("cuda:1") if torch.cuda.device_count() > 1 else self.state[layer]['x'].detach()
+                gy = self.state[layer]['gy'].detach().to("cuda:1") if torch.cuda.device_count() > 1 else self.state[layer]['gy'].detach()
                 
                 if x.dim() == 2:
                     x = x.data.t()
