@@ -21,7 +21,7 @@ from influence.modules import EKFACInfluenceModule
 import torch
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+print("num devices: ", torch.cuda.device_count())
 
 model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
 model.to(DEVICE)

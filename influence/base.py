@@ -182,7 +182,7 @@ class BaseInfluenceModule(abc.ABC):
             loss_fn = self.objective.train_loss if train else self.objective.test_loss
             loss = loss_fn(self.model, batch=batch)
             params = self._model_params(with_names=False)
-            grad = torch.autograd.grad(loss, params)
+            grad = torch.autograd.grad(loss, params, retain_graph=False, create_graph=False)
             yield self._flatten_params_like(grad)
 
     def _loader_wrapper(self, train, batch_size=None, subset=None, sample_n_batches=-1):
