@@ -27,8 +27,8 @@ def print_memory_usage():
     for device in range(torch.cuda.device_count()):
         allocated = torch.cuda.memory_allocated(device) / (1024 ** 3)
         reserved = torch.cuda.memory_reserved(device) / (1024 ** 3)
-        print(f"Allocated memory: {allocated:.2f} GB")
-        print(f"Reserved memory: {reserved:.2f} GB")
+        print(f"{torch.cuda.get_device_name(device)}: Allocated memory: {allocated:.2f} GB")
+        print(f"{torch.cuda.get_device_name(device)}: Reserved memory: {reserved:.2f} GB")
 
 class BaseInfluenceObjective(abc.ABC):
     @abc.abstractmethod
