@@ -285,6 +285,7 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             )
         
         for grad in training_srcs:
+            print_memory_usage(self.device)
             grads = self._reshape_like_params(grad)
             training_srcs.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
@@ -305,8 +306,12 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             )
         
         for grad_q in queries:
+            print("After grad calc")
+            print_memory_usage(self.device)
             queries.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
             ihvp = self.inverse_hvp(grad_q)
+            print("After ihvp calc")
+            print_memory_usage(self.device)
             for layer in self.layer_names:
                 if layer not in ihvps:
                     ihvps[layer] = ihvp[layer].view(-1, 1)

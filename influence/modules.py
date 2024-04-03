@@ -52,10 +52,15 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
         
         ihvps = {}
         for layer_name in self.layer_names:
+            layer_grad = layer_grads[layer_name].to("cuda:1") if torch.cuda.device_count() > 1 else layer_grads[layer_name]
+            print(layer_grad.device)
             qs = self.state[layer_name]['qs']
+            print(qs.device)
             qa = self.state[layer_name]['qa']
+            print(qa.device)
             diag = self.state[layer_name]['diag']
-            v_kfe = qs.t().mm(layer_grads[layer_name].to("cuda:1") if torch.cuda.device_count() > 1 else layer_grads[layer_name]).mm(qa)
+            print(diag.device)
+            v_kfe = qs.t().mm(layer_grad).mm(qa)
             ihvps[layer_name] = qs.mm(v_kfe.div(diag.view(*v_kfe.size()) + self.damp)).mm(qa.t())
 
         return ihvps
