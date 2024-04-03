@@ -81,11 +81,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
                 except StopIteration:
                     next_loss = None
                     retain_graph = False
-                print("Before backward")
-                print_memory_usage()
                 self.accelerator.backward(current_loss, retain_graph=retain_graph) if self.accelerator else current_loss.backward(retain_graph=retain_graph)
-                print("After backward")
-                print_memory_usage()
                 self._update_covs()
                 self.model.zero_grad()
                 current_loss = next_loss
@@ -123,11 +119,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
                 except StopIteration:
                     next_loss = None
                     retain_graph = False
-                print("Before backward")
-                print_memory_usage()
                 self.accelerator.backward(current_loss, retain_graph=retain_graph) if self.accelerator else current_loss.backward(retain_graph=retain_graph)
-                print("After backward")
-                print_memory_usage()
                 self._update_diags()
                 self.model.zero_grad()
                 current_loss = next_loss

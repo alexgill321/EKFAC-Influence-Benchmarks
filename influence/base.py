@@ -181,15 +181,8 @@ class BaseInfluenceModule(abc.ABC):
     def _loss_grad_loader_wrapper(self, train, **kwargs):
         loss_fn = self.objective.train_loss if train else self.objective.test_loss
         for batch, _ in self._loader_wrapper(train=train, **kwargs):
-            print("batch size: ", batch[0].shape, batch[1].shape)
-            print("Before loss?")
-            print_memory_usage()
             loss = loss_fn(self.model, batch=batch)
-            print("Before Params")
-            print_memory_usage()
             params = self._model_params(with_names=False)
-            print("Before grad")
-            print_memory_usage()
             grads = self._flatten_params_like(torch.autograd.grad(loss, params, retain_graph=False, create_graph=False))
             yield grads.detach().to("cuda:1") if torch.cuda.device_count() > 1 else grads.detach()
             # loss.backward( inputs=params, retain_graph=False, create_graph=False)
@@ -296,7 +289,7 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         
         for grad in training_srcs:
             print_memory_usage()
-            grads = self._reshape_like_params(grad)
+            grads = self._reshape_like_params(grad.to("cuda:1") if torch.cuda.device_count() > 1 else grad) 
             training_srcs.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
                 layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name))
@@ -316,12 +309,8 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             )
         
         for grad_q in queries:
-            print("After grad calc")
-            print_memory_usage()
             queries.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
             ihvp = self.inverse_hvp(grad_q)
-            print("After ihvp calc")
-            print_memory_usage()
             for layer in self.layer_names:
                 if layer not in ihvps:
                     ihvps[layer] = ihvp[layer].view(-1, 1)
@@ -437,9 +426,6 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
             self.cov_loader = train_loader
 
         self.compute_kfac_params()
-
-        print("After Init")
-        print_memory_usage()
 
     @abc.abstractmethod
     def compute_kfac_params(self):

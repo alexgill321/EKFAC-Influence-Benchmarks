@@ -120,11 +120,14 @@ module = EKFACInfluenceModule(
 )
 
 train_idxs = range(len(train_loader))
+
+start_idx = args.test_start_idx
+end_idx = args.test_end_idx
 test_idxs = range(args.test_start_idx, args.test_end_idx)
 influences = module.influences(train_idxs, test_idxs)
 
 for layer in influences:
-    with open(args.output_dir + f'/ekfac_influences_{layer}.txt', 'w') as f:
+    with open(args.output_dir + f'/ekfac_influences_{layer}_{start_idx}-{end_idx}.txt', 'w') as f:
         for i, influence in enumerate(influences[layer]):
             f.write(f'{i}: {influence.tolist()}\n')
     f.close()
