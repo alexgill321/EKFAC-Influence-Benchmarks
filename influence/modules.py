@@ -2,7 +2,7 @@ import logging
 from typing import List, Union
 
 import numpy as np
-from influence.base import BaseKFACInfluenceModule, BaseLayerInfluenceModule, BaseInfluenceObjective
+from influence.base import BaseKFACInfluenceModule, BaseLayerInfluenceModule, BaseInfluenceObjective, print_memory_usage
 import torch
 from tqdm import tqdm
 import torch.nn as nn
@@ -53,13 +53,9 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
         ihvps = {}
         for layer_name in self.layer_names:
             layer_grad = layer_grads[layer_name].to("cuda:1") if torch.cuda.device_count() > 1 else layer_grads[layer_name]
-            print(layer_grad.device)
             qs = self.state[layer_name]['qs']
-            print(qs.device)
             qa = self.state[layer_name]['qa']
-            print(qa.device)
             diag = self.state[layer_name]['diag']
-            print(diag.device)
             v_kfe = qs.t().mm(layer_grad).mm(qa)
             ihvps[layer_name] = qs.mm(v_kfe.div(diag.view(*v_kfe.size()) + self.damp)).mm(qa.t())
 
@@ -85,7 +81,11 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
                 except StopIteration:
                     next_loss = None
                     retain_graph = False
+                print("Before backward")
+                print_memory_usage()
                 self.accelerator.backward(current_loss, retain_graph=retain_graph) if self.accelerator else current_loss.backward(retain_graph=retain_graph)
+                print("After backward")
+                print_memory_usage()
                 self._update_covs()
                 self.model.zero_grad()
                 current_loss = next_loss
@@ -123,7 +123,11 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
                 except StopIteration:
                     next_loss = None
                     retain_graph = False
+                print("Before backward")
+                print_memory_usage()
                 self.accelerator.backward(current_loss, retain_graph=retain_graph) if self.accelerator else current_loss.backward(retain_graph=retain_graph)
+                print("After backward")
+                print_memory_usage()
                 self._update_diags()
                 self.model.zero_grad()
                 current_loss = next_loss

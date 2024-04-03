@@ -23,11 +23,12 @@ def _del_attr(obj, names):
     else:
         _del_attr(getattr(obj, names[0]), names[1:])
 
-def print_memory_usage(device):
-    allocated = torch.cuda.memory_allocated(device) / (1024 ** 3)
-    reserved = torch.cuda.memory_reserved(device) / (1024 ** 3)
-    print(f"Allocated memory: {allocated:.2f} GB")
-    print(f"Reserved memory: {reserved:.2f} GB")
+def print_memory_usage():
+    for device in range(torch.cuda.device_count()):
+        allocated = torch.cuda.memory_allocated(device) / (1024 ** 3)
+        reserved = torch.cuda.memory_reserved(device) / (1024 ** 3)
+        print(f"Allocated memory: {allocated:.2f} GB")
+        print(f"Reserved memory: {reserved:.2f} GB")
 
 class BaseInfluenceObjective(abc.ABC):
     @abc.abstractmethod
@@ -178,11 +179,21 @@ class BaseInfluenceModule(abc.ABC):
         return grads
     
     def _loss_grad_loader_wrapper(self, train, **kwargs):
+        loss_fn = self.objective.train_loss if train else self.objective.test_loss
         for batch, _ in self._loader_wrapper(train=train, **kwargs):
-            loss_fn = self.objective.train_loss if train else self.objective.test_loss
+            print("batch size: ", batch[0].shape, batch[1].shape)
+            print("Before loss?")
+            print_memory_usage()
             loss = loss_fn(self.model, batch=batch)
+            print("Before Params")
+            print_memory_usage()
             params = self._model_params(with_names=False)
+            print("Before grad")
+            print_memory_usage()
             grad = torch.autograd.grad(loss, params, retain_graph=False, create_graph=False)
+            # loss.backward( inputs=params, retain_graph=False, create_graph=False)
+            print("After grad")
+            print_memory_usage()
             yield self._flatten_params_like(grad)
 
     def _loader_wrapper(self, train, batch_size=None, subset=None, sample_n_batches=-1):
@@ -285,7 +296,7 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             )
         
         for grad in training_srcs:
-            print_memory_usage(self.device)
+            print_memory_usage()
             grads = self._reshape_like_params(grad)
             training_srcs.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
@@ -307,11 +318,11 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         
         for grad_q in queries:
             print("After grad calc")
-            print_memory_usage(self.device)
-            queries.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
+            print_memory_usage()
+            queries.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB", "grad shape": grad_q.shape})
             ihvp = self.inverse_hvp(grad_q)
             print("After ihvp calc")
-            print_memory_usage(self.device)
+            print_memory_usage()
             for layer in self.layer_names:
                 if layer not in ihvps:
                     ihvps[layer] = ihvp[layer].view(-1, 1)
@@ -427,6 +438,9 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
             self.cov_loader = train_loader
 
         self.compute_kfac_params()
+
+        print("After Init")
+        print_memory_usage()
 
     @abc.abstractmethod
     def compute_kfac_params(self):
