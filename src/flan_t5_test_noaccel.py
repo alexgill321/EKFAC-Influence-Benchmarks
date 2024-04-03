@@ -7,7 +7,7 @@ import json
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/data/data")
 parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks")
-parser.add_argument("--cov_batch_num", type=int, default=30)
+parser.add_argument("--cov_batch_num", type=int, default=10)
 parser.add_argument("--output_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/results")
 parser.add_argument("--model_dir", type=str, default="google/flan-t5-small")
 parser.add_argument("--layers", nargs='+', type=str, default='all')

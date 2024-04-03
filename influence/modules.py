@@ -52,7 +52,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
         
         ihvps = {}
         for layer_name in self.layer_names:
-            layer_grad = layer_grads[layer_name].to("cuda:1") if torch.cuda.device_count() > 1 else layer_grads[layer_name]
+            layer_grad = layer_grads[layer_name]
             qs = self.state[layer_name]['qs']
             qa = self.state[layer_name]['qa']
             diag = self.state[layer_name]['diag']

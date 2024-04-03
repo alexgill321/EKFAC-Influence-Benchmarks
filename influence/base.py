@@ -27,8 +27,8 @@ def print_memory_usage():
     for device in range(torch.cuda.device_count()):
         allocated = torch.cuda.memory_allocated(device) / (1024 ** 3)
         reserved = torch.cuda.memory_reserved(device) / (1024 ** 3)
-        print(f"{torch.cuda.get_device_name(device)}: Allocated memory: {allocated:.2f} GB")
-        print(f"{torch.cuda.get_device_name(device)}: Reserved memory: {reserved:.2f} GB")
+        print(f"cuda:{device}: Allocated memory: {allocated:.2f} GB")
+        print(f"cuda:{device}: Reserved memory: {reserved:.2f} GB")
 
 class BaseInfluenceObjective(abc.ABC):
     @abc.abstractmethod
@@ -190,11 +190,10 @@ class BaseInfluenceModule(abc.ABC):
             params = self._model_params(with_names=False)
             print("Before grad")
             print_memory_usage()
-            grad = torch.autograd.grad(loss, params, retain_graph=False, create_graph=False)
+            grads = self._flatten_params_like(torch.autograd.grad(loss, params, retain_graph=False, create_graph=False))
+            yield grads.detach().to("cuda:1") if torch.cuda.device_count() > 1 else grads.detach()
             # loss.backward( inputs=params, retain_graph=False, create_graph=False)
-            print("After grad")
-            print_memory_usage()
-            yield self._flatten_params_like(grad)
+            
 
     def _loader_wrapper(self, train, batch_size=None, subset=None, sample_n_batches=-1):
         loader = self.train_loader if train else self.test_loader
@@ -319,7 +318,7 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         for grad_q in queries:
             print("After grad calc")
             print_memory_usage()
-            queries.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB", "grad shape": grad_q.shape})
+            queries.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
             ihvp = self.inverse_hvp(grad_q)
             print("After ihvp calc")
             print_memory_usage()
