@@ -30,6 +30,16 @@ def print_memory_usage():
         print(f"cuda:{device}: Allocated memory: {allocated:.2f} GB")
         print(f"cuda:{device}: Reserved memory: {reserved:.2f} GB")
 
+def get_memory_usage():
+    allocated_memory = {}
+
+    # Iterate through each available CUDA device
+    for device_id in range(torch.cuda.device_count()):
+        device = torch.device(f"cuda:{device_id}")
+        allocated_memory[f"Cuda:{device_id} Mem Allocated (GB)"] = f"{torch.cuda.memory_allocated(device) / (1024 ** 3):.2f}"
+
+    return allocated_memory
+
 class BaseInfluenceObjective(abc.ABC):
     @abc.abstractmethod
     def train_outputs(self, model: nn.Module, batch: Any) -> Any:
@@ -150,7 +160,7 @@ class BaseInfluenceModule(abc.ABC):
     def _flatten_params_like(self, params_like):
         vec = []
         for p in params_like:
-            vec.append(p.view(-1))
+            vec.append(p.view(-1).detach().to("cuda:1") if torch.cuda.device_count() > 1 else p.view(-1).detach())
         return torch.cat(vec)
 
     def _reshape_like_params(self, vec):
@@ -183,9 +193,8 @@ class BaseInfluenceModule(abc.ABC):
         for batch, _ in self._loader_wrapper(train=train, **kwargs):
             loss = loss_fn(self.model, batch=batch)
             params = self._model_params(with_names=False)
-            grads = self._flatten_params_like(torch.autograd.grad(loss, params, retain_graph=False, create_graph=False))
-            yield grads.detach().to("cuda:1") if torch.cuda.device_count() > 1 else grads.detach()
-            # loss.backward( inputs=params, retain_graph=False, create_graph=False)
+            grads = torch.autograd.grad(loss, params)
+            yield self._flatten_params_like(grads)
             
 
     def _loader_wrapper(self, train, batch_size=None, subset=None, sample_n_batches=-1):
@@ -288,8 +297,8 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             )
         
         for grad in training_srcs:
-            grads = self._reshape_like_params(grad.to("cuda:1") if torch.cuda.device_count() > 1 else grad) 
-            training_srcs.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
+            grads = self._reshape_like_params(grad) 
+            training_srcs.set_postfix(get_memory_usage())
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
                 layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name))
                 if layer_name not in scores:
@@ -308,7 +317,7 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             )
         
         for grad_q in queries:
-            queries.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
+            queries.set_postfix(get_memory_usage())
             ihvp = self.inverse_hvp(grad_q)
             for layer in self.layer_names:
                 if layer not in ihvps:
