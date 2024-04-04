@@ -29,6 +29,7 @@ def print_memory_usage():
         reserved = torch.cuda.memory_reserved(device) / (1024 ** 3)
         print(f"cuda:{device}: Allocated memory: {allocated:.2f} GB")
         print(f"cuda:{device}: Reserved memory: {reserved:.2f} GB")
+        print(f"summary: {torch.cuda.memory_summary(device)}")
 
 def get_memory_usage():
     allocated_memory = {}
@@ -288,6 +289,7 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
                    ) -> Tensor:
 
         ihvps = self._compute_ihvps(test_idxs)
+        torch.cuda.empty_cache()
         scores = {}
 
         training_srcs = tqdm(
@@ -295,7 +297,6 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             total=len(train_idxs), 
             desc="Calculating Training Loss Grads"
             )
-        
         for grad in training_srcs:
             grads = self._reshape_like_params(grad) 
             training_srcs.set_postfix(get_memory_usage())
