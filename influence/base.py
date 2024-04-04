@@ -288,15 +288,14 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             )
         
         for grad in training_srcs:
-            print_memory_usage()
             grads = self._reshape_like_params(grad.to("cuda:1") if torch.cuda.device_count() > 1 else grad) 
             training_srcs.set_postfix({"Allocated memory": f"{torch.cuda.memory_allocated(self.device) / (1024 ** 3):.2f} GB"})
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
                 layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name))
                 if layer_name not in scores:
-                    scores[layer_name] = (layer_grad @ ihvps[layer_name]).view(-1, 1).detach().cpu()
+                    scores[layer_name] = (layer_grad @ ihvps[layer_name]).view(-1, 1).detach().to("cpu")
                 else:
-                    scores[layer_name] = torch.cat([scores[layer_name], (layer_grad @ ihvps[layer_name]).view(-1, 1).detach().cpu()], dim=1)
+                    scores[layer_name] = torch.cat([scores[layer_name], (layer_grad @ ihvps[layer_name]).view(-1, 1).detach().to("cpu")], dim=1)
          
         return scores
     
