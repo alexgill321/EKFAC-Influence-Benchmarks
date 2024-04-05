@@ -121,12 +121,31 @@ module = EKFACInfluenceModule(
 
 train_idxs = range(len(train_loader))
 
-for i in range(int(len(test_dataloader)/args.test_size)):
-    test_idxs = range(i*args.test_size, (i+1)*args.test_size)
+num_full_batches = len(test_dataloader) // args.test_size
+remainder = len(test_dataloader) % args.test_size
+
+for batch_idx in range(num_full_batches):
+    start_idx = batch_idx * args.test_size
+    end_idx = (batch_idx + 1) * args.test_size
+    print(f"Batch {batch_idx}: {start_idx} - {end_idx}")
+    test_idxs = range(start_idx, end_idx)
     influences = module.influences(train_idxs, test_idxs)
 
     for layer in influences:
-        with open(args.output_dir + f'/ekfac_influences_{layer}_{i*args.test_size}-{(i+1)*args.test_size}.txt', 'w') as f:
-            for i, influence in enumerate(influences[layer]):
-                f.write(f'{i}: {influence.tolist()}\n')
-        f.close()
+        output_file_path = f"{args.output_dir}/ekfac_influences_{layer}_{start_idx}-{end_idx}.txt"
+        with open(output_file_path, 'w') as f:
+            for idx, influence in enumerate(influences[layer]):
+                f.write(f'{idx}: {influence.tolist()}\n')
+
+# Handle the last batch if there's a remainder
+if remainder > 0:
+    start_idx = num_full_batches * args.test_size
+    end_idx = start_idx + remainder
+    test_idxs = range(start_idx, end_idx)
+    influences = module.influences(train_idxs, test_idxs)
+
+    for layer in influences:
+        output_file_path = f"{args.output_dir}/ekfac_influences_{layer}_{start_idx}-{end_idx}.txt"
+        with open(output_file_path, 'w') as f:
+            for idx, influence in enumerate(influences[layer]):
+                f.write(f'{idx}: {influence.tolist()}\n')
