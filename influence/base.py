@@ -300,6 +300,8 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         for grad in training_srcs:
             grads = self._reshape_like_params(grad) 
             training_srcs.set_postfix(get_memory_usage())
+
+            # get batch of 15 ihvps
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
                 layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name)).detach().to("cpu")
                 if layer_name not in scores:
@@ -319,12 +321,12 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
         
         for grad_q in queries:
             queries.set_postfix(get_memory_usage())
-            ihvp = self.inverse_hvp(grad_q)
+            ihvp = self.inverse_hvp(grad_q) # Per layer IHVPs for a single query
             for layer in self.layer_names:
                 if layer not in ihvps:
-                    ihvps[layer] = ihvp[layer].view(-1, 1).detach().to("cpu")
+                    ihvps[layer] = ihvp[layer].view(-1, 1).detach().to("cpu") #Dictionary of matrices for each layer (n_queries x (m *n))
                 else:
-                    ihvps[layer] = torch.cat([ihvps[layer], ihvp[layer].view(-1, 1).detach().to("cpu")], dim=1)
+                    ihvps[layer] = torch.cat([ihvps[layer], ihvp[layer].view(-1, 1).detach().to("cpu")], dim=1) #Dictionary of matrices for each layer (n_queries x (m *n))
         return ihvps
 
     def _layer_hooks(self):
