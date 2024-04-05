@@ -303,13 +303,23 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
 
             # get batch of 15 ihvps
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
-                layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name)).detach().to("cpu")
+                layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name))
+                layer_scores = None
+                for ihvp_batch in self.ihvp_loader_wrapper(ihvps[layer_name], batch_size=10):
+                    if layer_scores is None:
+                        layer_scores = (layer_grad @ ihvp_batch)
+                    else:
+                        layer_scores = torch.cat([layer_scores, (layer_grad @ ihvp_batch)], dim=0)
                 if layer_name not in scores:
-                    scores[layer_name] = (layer_grad @ ihvps[layer_name]).view(-1, 1).detach().to("cpu")
+                    scores[layer_name] = (layer_scores).view(-1, 1).detach().to("cpu")
                 else:
-                    scores[layer_name] = torch.cat([scores[layer_name], (layer_grad @ ihvps[layer_name]).view(-1, 1)], dim=1)
-         
+                    scores[layer_name] = torch.cat([scores[layer_name], layer_scores.view(-1, 1).detach().to("cpu")], dim=1)
+            
         return scores
+    
+    def ihvp_loader_wrapper(self, ihvps, batch_size=10):
+        for batch in ihvps.split(batch_size, dim=1):
+            yield batch.to("cuda:1") if torch.cuda.device_count() > 1 else batch.to("cuda:0")
     
     def _compute_ihvps(self, test_idxs: List[int]) -> torch.Tensor:
         ihvps = {}
