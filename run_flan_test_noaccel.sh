@@ -1,10 +1,11 @@
 #!/bin/bash
 #SBATCH --account marasovic-gpu-np
 #SBATCH --partition marasovic-gpu-np
+#SBATCH --qos=marasovic-gpulong-np
 #SBATCH --ntasks-per-node=32
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:a100:2
-#SBATCH --time=12:00:00
+#SBATCH --time=36:00:00
 #SBATCH --mem=80GB
 #SBATCH --mail-user=u1380656@umail.utah.edu
 #SBATCH --mail-type=FAIL,END
@@ -21,4 +22,4 @@ echo -n > $NVIDIA_SMI_LOG
 mkdir -p $OUTDIR
 nohup watch -n 10 "nvidia-smi >> $NVIDIA_SMI_LOG" &
 source $WORKDIR/ekfac/bin/activate
-python $WORKDIR/src/flan_t5_test_noaccel.py --data_dir $DATADIR --ekfac_dir $WORKDIR --cov_batch_num 100 --output_dir $OUTDIR --model_dir $MODELDIR --test_size 15 --model_max_len 2500
+python $WORKDIR/src/flan_t5_test_noaccel.py --data_dir $DATADIR --ekfac_dir $WORKDIR --cov_batch_num 300 --output_dir $OUTDIR --model_dir $MODELDIR --test_size 15 --model_max_len 2000
