@@ -301,11 +301,11 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             grads = self._reshape_like_params(grad) 
             training_srcs.set_postfix(get_memory_usage())
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
-                layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name))
+                layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name)).detach().to("cpu")
                 if layer_name not in scores:
                     scores[layer_name] = (layer_grad @ ihvps[layer_name]).view(-1, 1).detach().to("cpu")
                 else:
-                    scores[layer_name] = torch.cat([scores[layer_name], (layer_grad @ ihvps[layer_name]).view(-1, 1).detach().to("cpu")], dim=1)
+                    scores[layer_name] = torch.cat([scores[layer_name], (layer_grad @ ihvps[layer_name]).view(-1, 1)], dim=1)
          
         return scores
     
@@ -322,9 +322,9 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
             ihvp = self.inverse_hvp(grad_q)
             for layer in self.layer_names:
                 if layer not in ihvps:
-                    ihvps[layer] = ihvp[layer].view(-1, 1)
+                    ihvps[layer] = ihvp[layer].view(-1, 1).detach().to("cpu")
                 else:
-                    ihvps[layer] = torch.cat([ihvps[layer], ihvp[layer].view(-1, 1)], dim=1)
+                    ihvps[layer] = torch.cat([ihvps[layer], ihvp[layer].view(-1, 1).detach().to("cpu")], dim=1)
         return ihvps
 
     def _layer_hooks(self):
