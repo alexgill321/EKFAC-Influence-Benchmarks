@@ -161,7 +161,7 @@ class BaseInfluenceModule(abc.ABC):
     def _flatten_params_like(self, params_like):
         vec = []
         for p in params_like:
-            vec.append(p.view(-1).detach().to("cuda:1") if torch.cuda.device_count() > 1 else p.view(-1).detach())
+            vec.append(p.view(-1).detach())
         return torch.cat(vec)
 
     def _reshape_like_params(self, vec):
@@ -319,7 +319,7 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
     
     def ihvp_loader_wrapper(self, ihvps, batch_size=10):
         for batch in ihvps.split(batch_size, dim=1):
-            yield batch.to("cuda:1") if torch.cuda.device_count() > 1 else batch.to("cuda:0")
+            yield batch
     
     def _compute_ihvps(self, test_idxs: List[int]) -> torch.Tensor:
         ihvps = {}
@@ -459,8 +459,8 @@ class BaseKFACInfluenceModule(BaseLayerInfluenceModule):
     def _update_covs(self):
         for layer_name, layer in zip(self.layer_names, self.layer_modules):
             with torch.no_grad():
-                x = self.state[layer]['x'].detach().to("cuda:1") if torch.cuda.device_count() > 1 else self.state[layer]['x'].detach()
-                gy = self.state[layer]['gy'].detach().to("cuda:1") if torch.cuda.device_count() > 1 else self.state[layer]['gy'].detach()
+                x = self.state[layer]['x']
+                gy = self.state[layer]['gy']
                 
                 if x.dim() == 2:
                     x = x.data.t()

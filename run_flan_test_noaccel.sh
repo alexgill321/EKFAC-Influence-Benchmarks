@@ -1,12 +1,11 @@
 #!/bin/bash
 #SBATCH --account marasovic-gpu-np
 #SBATCH --partition marasovic-gpu-np
-#SBATCH --qos=marasovic-gpulong-np
 #SBATCH --ntasks-per-node=32
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:a100:2
-#SBATCH --time=36:00:00
-#SBATCH --mem=80GB
+#SBATCH --time=12:00:00
+#SBATCH --mem=245GB
 #SBATCH --mail-user=u1380656@umail.utah.edu
 #SBATCH --mail-type=FAIL,END
 #SBATCH -o job-%j

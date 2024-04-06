@@ -1,5 +1,5 @@
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 import sys
 import argparse
 import json
@@ -7,11 +7,12 @@ import json
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/data/data")
 parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks")
-parser.add_argument("--cov_batch_num", type=int, default=100)
+parser.add_argument("--cov_batch_num", type=int, default=10)
 parser.add_argument("--output_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/results")
-parser.add_argument("--model_id", type=str, default="google/flan-t5-small")
-parser.add_argument("--model_dir", type=str, default="/scratch/general/vast/u1420010/final_models/model")
-parser.add_argument("--layers", nargs='+', type=str, default=['decoder.block.3.layer.2.DenseReluDense.wi_0', 'encoder.block.4.layer.1.DenseReluDense.wi_0'])
+parser.add_argument("--model_dir", type=str, default="google/flan-t5-small")
+parser.add_argument("--layers", nargs='+', type=str, default='all')
+parser.add_argument("--test_size", type=int, default=50)
+parser.add_argument("--model_max_len", type=int, default=3000)
 
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
@@ -25,6 +26,8 @@ import torch
 def main():
     accelerator = Accelerator()
     DEVICE = accelerator.device
+
+    print("num devices: ", torch.cuda.device_count())
 
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
     model.to(DEVICE)
@@ -48,7 +51,7 @@ def main():
             return input_data, label
         
     def get_model_and_dataloader(data_path = args.data_dir+'/contract-nli/'):
-        tokenizer = AutoTokenizer.from_pretrained(args.model_id, truncation_side="right",  model_max_length=4200)
+        tokenizer = AutoTokenizer.from_pretrained(args.model_id, truncation_side="right",  model_max_length=args.model_max_len)
 
         dataset_train = CustomMNLIDataset(file_path=data_path+'T5_ready_train.json', tokenizer=tokenizer)
         train_dataloader = DataLoader(dataset_train, batch_size=1)
@@ -59,35 +62,38 @@ def main():
         dataset_test = CustomMNLIDataset(file_path=data_path + 'T5_ready_test.json', tokenizer=tokenizer)
         test_dataloader = DataLoader(dataset_test, batch_size=1)
 
-        return train_dataloader, dev_dataloader, test_dataloader
+        if args.cov_batch_num is not None:
+            cov_dataset = Subset(dataset_train, range(args.cov_batch_num))
+            cov_dataloader = DataLoader(cov_dataset, batch_size=1)
+        else:
+            cov_dataloader = train_dataloader    
 
-    train_loader, dev_dataloader, test_dataloader = get_model_and_dataloader()
+        return train_dataloader, dev_dataloader, test_dataloader, cov_dataloader
 
-    train_loader, dev_dataloader, test_dataloader = accelerator.prepare(train_loader, dev_dataloader, test_dataloader)
+    train_loader, dev_dataloader, test_dataloader, cov_dataloader = get_model_and_dataloader()
+
+    train_loader, dev_dataloader, test_dataloader = accelerator.prepare(train_loader, dev_dataloader, test_dataloader, cov_dataloader)
         
     class TransformerClassificationObjective(KFACBaseInfluenceObjective):
         def test_loss(self, model, batch):
-            model_outputs = self.train_outputs(model, batch)
-            output_probs = torch.log_softmax(model_outputs.logits, dim=-1)
-            completion_probs = output_probs[:, -1]
-            loss_fn = torch.nn.CrossEntropyLoss()
+            outputs = self.train_outputs(model, batch)
             # if batch[1].device != DEVICE:
             #     batch[1] = batch[1].to(DEVICE)
-            return loss_fn(completion_probs, batch[1])
+            return outputs.loss
         
         def train_outputs(self, model, batch):
             # if next(model.parameters()).device != DEVICE:
             #     model = model.to(DEVICE)
             # if batch[0].device != DEVICE:
             #     batch[0] = batch[0].to(DEVICE)
-            return model(input_ids=batch[0], decoder_input_ids=batch[0])
+            return model(input_ids=batch[0], labels=batch[1])
         
         def train_loss_on_outputs(self, outputs, batch):
-            outputs = self.train_outputs(model, batch)
+            output = self.train_outputs(model, batch)
             # if batch[1].device != DEVICE:
             #     batch[1] = batch[1].to(DEVICE)
-            loss_fn = torch.nn.CrossEntropyLoss()
-            return loss_fn(outputs.logits[:, -1, :], batch[1].view(-1))
+            
+            return output.loss
 
         def pseudograd_loss(self, model, batch, n_samples=1, generator=None):
             with torch.no_grad():  # Context manager to temporarily disable gradient calculations
@@ -102,26 +108,56 @@ def main():
                 with torch.enable_grad():
                     yield self.train_loss_on_outputs(outputs, sampled_batch)
 
+    if args.layers == 'all':
+        layers = []
+        for name, layer in model.named_modules():
+            if isinstance(layer, torch.nn.Linear) and name.endswith('.wo'):
+                layers.append(name)
+    else:
+        layers = args.layers
+
     module = EKFACInfluenceModule(
         model=model,
         objective=TransformerClassificationObjective(),
         train_loader=train_loader,
         test_loader=test_dataloader,
+        cov_loader=cov_dataloader,
         device=DEVICE,
         accelerator=accelerator,
-        layers=args.layers,
+        layers=layers,
         n_samples=1
     )
 
     train_idxs = range(len(train_loader))
-    test_idxs = range(len(test_dataloader))
-    influences = module.influences(train_idxs, test_idxs)
 
-    for layer in influences:
-        with open(args.output_dir + f'/ekfac_influences_{layer}.txt', 'w') as f:
-            for i, influence in enumerate(influences[layer]):
-                f.write(f'{i}: {influence.tolist()}\n')
-        f.close()
+    num_full_batches = len(test_dataloader) // args.test_size
+    remainder = len(test_dataloader) % args.test_size
+
+    for batch_idx in range(num_full_batches):
+        start_idx = batch_idx * args.test_size
+        end_idx = (batch_idx + 1) * args.test_size
+        print(f"Batch {batch_idx}: {start_idx} - {end_idx}")
+        test_idxs = range(start_idx, end_idx)
+        influences = module.influences(train_idxs, test_idxs)
+
+        for layer in influences:
+            output_file_path = f"{args.output_dir}/ekfac_influences_{layer}_{start_idx}-{end_idx}.txt"
+            with open(output_file_path, 'w') as f:
+                for idx, influence in enumerate(influences[layer]):
+                    f.write(f'{idx}: {influence.tolist()}\n')
+
+    # Handle the last batch if there's a remainder
+    if remainder > 0:
+        start_idx = num_full_batches * args.test_size
+        end_idx = start_idx + remainder
+        test_idxs = range(start_idx, end_idx)
+        influences = module.influences(train_idxs, test_idxs)
+
+        for layer in influences:
+            output_file_path = f"{args.output_dir}/ekfac_influences_{layer}_{start_idx}-{end_idx}.txt"
+            with open(output_file_path, 'w') as f:
+                for idx, influence in enumerate(influences[layer]):
+                    f.write(f'{idx}: {influence.tolist()}\n')
 
 if __name__ == '__main__':
     main()
