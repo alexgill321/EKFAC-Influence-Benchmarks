@@ -9,8 +9,7 @@ parser.add_argument("--data_dir", type=str, default="C:/Users/alexg/Documents/Gi
 parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks")
 parser.add_argument("--cov_batch_num", type=int, default=100)
 parser.add_argument("--output_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/results")
-parser.add_argument("--model_id", type=str, default="google/flan-t5-small")
-parser.add_argument("--model_dir", type=str, default="/scratch/general/vast/u1420010/final_models/model")
+parser.add_argument("--model_dir", type=str, default="google/flan-t5-small")
 parser.add_argument("--layers", nargs='+', type=str, default=['decoder.block.3.layer.2.DenseReluDense.wi_0', 'encoder.block.4.layer.1.DenseReluDense.wi_0'])
 
 args = parser.parse_args()
@@ -48,7 +47,7 @@ def main():
             return input_data, label
         
     def get_model_and_dataloader(data_path = args.data_dir+'/contract-nli/'):
-        tokenizer = AutoTokenizer.from_pretrained(args.model_id, truncation_side="right",  model_max_length=4200)
+        tokenizer = AutoTokenizer.from_pretrained(args.model_dir, truncation_side="right",  model_max_length=4200)
 
         dataset_train = CustomMNLIDataset(file_path=data_path+'T5_ready_train.json', tokenizer=tokenizer)
         train_dataloader = DataLoader(dataset_train, batch_size=1)
