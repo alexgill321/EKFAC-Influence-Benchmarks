@@ -6,6 +6,8 @@ from influence.base import BaseKFACInfluenceModule, BaseLayerInfluenceModule, Ba
 import torch
 from tqdm import tqdm
 import torch.nn as nn
+import torch.nn.functional as F
+
 from torch.utils import data
 
 class KFACInfluenceModule(BaseKFACInfluenceModule):  
@@ -47,7 +49,7 @@ class KFACInfluenceModule(BaseKFACInfluenceModule):
 
     
 class EKFACInfluenceModule(BaseKFACInfluenceModule):
-    def inverse_hvp(self, vec):
+    def inverse_hvp(self, vec, do_svd = True):
         layer_grads = self._reshape_like_layers(vec)
         
         ihvps = {}
@@ -57,7 +59,30 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
             qa = self.state[layer_name]['qa']
             diag = self.state[layer_name]['diag']
             v_kfe = qs.t().mm(layer_grad).mm(qa)
-            ihvps[layer_name] = qs.mm(v_kfe.div(diag.view(*v_kfe.size()) + self.damp)).mm(qa.t())
+
+            ihvp_per_layer_for_one_query = qs.mm(v_kfe.div(diag.view(*v_kfe.size()) + self.damp)).mm(qa.t())
+
+            if do_svd:
+                lowrank_svd_comp_one, lowrank_svd_comp_two, lowrank_svd_comp_three = (
+                    torch.svd_lowrank(ihvp_per_layer_for_one_query, q=32, niter=2, M=None))
+                ihvps[layer_name] = {'comp_one': lowrank_svd_comp_one,
+                                     'comp_two': lowrank_svd_comp_two,
+                                     'comp_three': lowrank_svd_comp_three}
+            else:
+                ihvps[layer_name] = ihvp_per_layer_for_one_query
+            #### verify correlation
+
+            # U_Sigma = torch.matmul(lowrank_svd_comp_one, torch.diag(lowrank_svd_comp_two))  # U * Σ
+            # U_Sigma_VT = torch.matmul(U_Sigma, lowrank_svd_comp_three.t())
+            # print("shape of U_Sigma_VT is {} ".format(U_Sigma_VT.shape))
+            # correlation = F.cosine_similarity(U_Sigma_VT, ihvp_per_layer_for_one_query, dim=1)
+            # print(correlation)
+            # exit()
+
+            # ihvps[layer_name] = qs.mm(v_kfe.div(diag.view(*v_kfe.size()) + self.damp)).mm(qa.t())
+
+
+
 
         return ihvps
             
