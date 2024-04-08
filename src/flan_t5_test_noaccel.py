@@ -5,14 +5,15 @@ import argparse
 import json
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--data_dir", type=str, default="/Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks/data/data")
-parser.add_argument("--ekfac_dir", type=str, default="/Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks")
+parser.add_argument("--data_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/data/data")
+parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks")
 parser.add_argument("--cov_batch_num", type=int, default=10)
-parser.add_argument("--output_dir", type=str, default="/Users/purbidbambroo/PycharmProjects/EKFAC-Influence-Benchmarks/results/")
+parser.add_argument("--output_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks/results")
 parser.add_argument("--model_dir", type=str, default="google/flan-t5-small")
 parser.add_argument("--layers", nargs='+', type=str, default='all')
-parser.add_argument("--test_size", type=int, default=6)
+parser.add_argument("--test_size", type=int, default=None)
 parser.add_argument("--model_max_len", type=int, default=3000)
+parser.add_argument("--svd", type=bool, default=True)
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
 
@@ -121,15 +122,19 @@ module = EKFACInfluenceModule(
 
 train_idxs = range(len(train_loader))
 
-num_full_batches = len(test_dataloader) // args.test_size
-remainder = len(test_dataloader) % args.test_size
+if args.test_size is None:
+    args.test_size = len(test_dataloader)
+else:
+    args.test_size = min(args.test_size, len(test_dataloader))  
+    num_full_batches = len(test_dataloader) // args.test_size
+    remainder = len(test_dataloader) % args.test_size
 
 for batch_idx in range(num_full_batches):
     start_idx = batch_idx * args.test_size
     end_idx = (batch_idx + 1) * args.test_size
     print(f"Batch {batch_idx}: {start_idx} - {end_idx}")
     test_idxs = range(start_idx, end_idx)
-    influences = module.influences(train_idxs, test_idxs, do_svd=True)
+    influences = module.influences(train_idxs, test_idxs, args.svd)
 
     for layer in influences:
         output_file_path = f"{args.output_dir}/ekfac_influences_{layer}_{start_idx}-{end_idx}.txt"
@@ -142,7 +147,7 @@ if remainder > 0:
     start_idx = num_full_batches * args.test_size
     end_idx = start_idx + remainder
     test_idxs = range(start_idx, end_idx)
-    influences = module.influences(train_idxs, test_idxs)
+    influences = module.influences(train_idxs, test_idxs, args.svd)
 
     for layer in influences:
         output_file_path = f"{args.output_dir}/ekfac_influences_{layer}_{start_idx}-{end_idx}.txt"

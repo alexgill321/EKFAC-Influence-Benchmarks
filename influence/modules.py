@@ -49,7 +49,7 @@ class KFACInfluenceModule(BaseKFACInfluenceModule):
 
     
 class EKFACInfluenceModule(BaseKFACInfluenceModule):
-    def inverse_hvp(self, vec, do_svd = True):
+    def inverse_hvp(self, vec, svd = True):
         layer_grads = self._reshape_like_layers(vec)
         
         ihvps = {}
@@ -62,7 +62,7 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
 
             ihvp_per_layer_for_one_query = qs.mm(v_kfe.div(diag.view(*v_kfe.size()) + self.damp)).mm(qa.t())
 
-            if do_svd:
+            if svd:
                 lowrank_svd_comp_one, lowrank_svd_comp_two, lowrank_svd_comp_three = (
                     torch.svd_lowrank(ihvp_per_layer_for_one_query, q=32, niter=2, M=None))
                 ihvps[layer_name] = {'comp_one': lowrank_svd_comp_one,
@@ -80,10 +80,6 @@ class EKFACInfluenceModule(BaseKFACInfluenceModule):
             # exit()
 
             # ihvps[layer_name] = qs.mm(v_kfe.div(diag.view(*v_kfe.size()) + self.damp)).mm(qa.t())
-
-
-
-
         return ihvps
             
     def compute_kfac_params(self):

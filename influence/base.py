@@ -283,101 +283,71 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
     def inverse_hvp(self, vec):
         raise NotImplementedError()
 
-    def ihvp_loader_wrapper(self, ihvps, batch_size=10, do_svd=False):
-
-
-
-        if do_svd:
+    def ihvp_loader_wrapper(self, ihvps, batch_size=10, svd=False):
+        if svd:
             for batch_comp_one, batch_comp_two, batch_comp_three in zip(ihvps["comp_one"].split(batch_size, dim=-1), ihvps["comp_two"].split(batch_size, dim=-1), ihvps["comp_three"].split(batch_size, dim=-1)):
-
-                device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-
-                yield (batch_comp_one.to(device),
-                       batch_comp_two.to(device),
-                       batch_comp_three.to(device)
-                       )
+                yield (
+                    batch_comp_one, 
+                    batch_comp_two, 
+                    batch_comp_three
+                    )
         else:
             for batch in ihvps.split(batch_size, dim=-1):
-                device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-                yield batch.to(device)
+                yield batch.to("cuda:1") if torch.cuda.device_count() > 1 else batch.to(self.device)
 
 
     def influences(self,
                    train_idxs: List[int],
                    test_idxs: List[int],
-                   do_svd = True
+                   svd = True
                    ) -> Tensor:
 
-        ihvps = self._compute_ihvps(test_idxs, do_svd)
-        torch.cuda.empty_cache()
+        ihvps = self._compute_ihvps(test_idxs, svd)
         scores = {}
 
-
-        if do_svd:
+        if svd:
             print("we now have IHVPS for each layer, total len is {}".format(len(ihvps)))
-            print("each item in ihvp is of shape :{}".format(ihvps[list(ihvps.keys())[0]]['comp_one'].shape))
+            print("Each item in ihvp is of shape :{}".format(ihvps[list(ihvps.keys())[0]]['comp_one'].shape))
 
         training_srcs = tqdm(
             self._loss_grad_loader_wrapper(train=True, subset=train_idxs, batch_size=1),
             total=len(train_idxs), 
             desc="Calculating Training Loss Grads"
             )
-
-
-        grad_itr = 0
+        
         for grad in training_srcs:
             grads = self._reshape_like_params(grad) 
             training_srcs.set_postfix(get_memory_usage())
-
-            # get batch of 15 ihvps
 
             for layer_name, layer in zip(self.layer_names, self.layer_modules):
                 layer_grad = self._flatten_params_like(self._reshape_like_layer_params(grads, layer, layer_name))
                 layer_scores = None
 
-
-                if do_svd:
-
-                    for (ihvp_batch_comp_one, ihvp_batch_comp_two, ihvp_batch_comp_three) in self.ihvp_loader_wrapper(ihvps[layer_name], batch_size=2, do_svd=do_svd):
-
-                        # print(ihvp_batch_comp_one.shape)
-                        # print(ihvp_batch_comp_two.shape)
-                        # print(ihvp_batch_comp_three.shape)
+                if svd:
+                    for (ihvp_batch_comp_one, ihvp_batch_comp_two, ihvp_batch_comp_three) in self.ihvp_loader_wrapper(ihvps[layer_name], batch_size=5, svd=svd):
 
                         ihvp_batch_comp_two = ihvp_batch_comp_two.permute(1, 0)
                         all_diags_for_comp_two = torch.stack([torch.diag(per_query_comp_two) for per_query_comp_two in ihvp_batch_comp_two ]).permute(1, 2, 0)
                         U_Sigma = torch.matmul(ihvp_batch_comp_one.permute(2, 0, 1), all_diags_for_comp_two.permute(2, 0, 1))  # U * Σ
                         ihvp_svd_approx = torch.matmul(U_Sigma, ihvp_batch_comp_three.permute(2, 1, 0))
 
-                        curr_batch_ihvp_training_grad_product_scores = []
-                        for each_query_ihvp in ihvp_svd_approx:
-                            curr_batch_ihvp_training_grad_product_scores.append(layer_grad.squeeze(dim=0) @ each_query_ihvp.view(-1, 1).squeeze(dim=1))
-
                         if layer_scores is None:
                             # layer_scores = (layer_grad @ ihvp_svd_approx)
-                            layer_scores = torch.stack(curr_batch_ihvp_training_grad_product_scores)
+                            layer_scores = layer_grad @ ihvp_svd_approx.reshape(ihvp_svd_approx.shape[0], -1).permute(1, 0)
                         else:
                             # layer_scores = torch.cat([layer_scores, (layer_grad @ ihvp_svd_approx)], dim=0)
-                            layer_scores = torch.cat([layer_scores, torch.stack(curr_batch_ihvp_training_grad_product_scores)])
-
-                    if layer_name not in scores:
-                        scores[layer_name] = (layer_scores).view(-1, 1).detach().to("cpu")
-                    else:
-                        scores[layer_name] = torch.cat([scores[layer_name], layer_scores.view(-1, 1).detach().to("cpu")],
-                                                       dim=1)
+                            layer_scores = torch.cat([layer_scores, layer_grad @ ihvp_svd_approx.reshape(ihvp_svd_approx.shape[0], -1).permute(1, 0)], dim=0)
                 else:
                     for ihvp_batch in self.ihvp_loader_wrapper(ihvps[layer_name], batch_size=10):
                         if layer_scores is None:
                             layer_scores = (layer_grad @ ihvp_batch)
                         else:
                             layer_scores = torch.cat([layer_scores, (layer_grad @ ihvp_batch)], dim=0)
-                    if layer_name not in scores:
-                        scores[layer_name] = (layer_scores).view(-1, 1).detach().to("cpu")
-                    else:
-                        scores[layer_name] = torch.cat(
-                            [scores[layer_name], layer_scores.view(-1, 1).detach().to("cpu")], dim=1)
+                if layer_name not in scores:
+                    scores[layer_name] = (layer_scores).view(-1, 1).detach().to("cpu")
+                else:
+                    scores[layer_name] = torch.cat([scores[layer_name], layer_scores.view(-1, 1).detach().to("cpu")], dim=1)
 
             # if grad_itr>10:
             #     layer_name_curr = list(scores.keys())[0]
@@ -388,7 +358,7 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
 
         return scores
     
-    def _compute_ihvps(self, test_idxs: List[int], do_svd = True) -> torch.Tensor:
+    def _compute_ihvps(self, test_idxs: List[int], svd = True) -> torch.Tensor:
         ihvps = {}
         queries = tqdm(
             self._loss_grad_loader_wrapper(train=False, subset=test_idxs, batch_size=1), 
@@ -398,34 +368,34 @@ class BaseLayerInfluenceModule(BaseInfluenceModule):
 
         for grad_q in queries: ##one for each query
             queries.set_postfix(get_memory_usage())
-            ihvp = self.inverse_hvp(grad_q, do_svd) # Per layer IHVPs for a single query
+            ihvp = self.inverse_hvp(grad_q, svd) # Per layer IHVPs for a single query
             for layer in self.layer_names:
                 if layer not in ihvps:
-                    if do_svd:
-                        ihvps[layer] = {'comp_one' : [ihvp[layer]['comp_one'].detach().to("cpu")],
-                                    'comp_two': [ihvp[layer]['comp_two'].detach().to("cpu")],
-                                    'comp_three': [ihvp[layer]['comp_three'].detach().to("cpu")]
+                    if svd:
+                        ihvps[layer] = {'comp_one' : [ihvp[layer]['comp_one']],
+                                    'comp_two': [ihvp[layer]['comp_two']],
+                                    'comp_three': [ihvp[layer]['comp_three']]
                                     }
                     else:
-                        ihvps[layer] = ihvp[layer].view(-1, 1).detach().to("cpu")  #Dictionary of matrices for each layer (n_queries x (m *n))
+                        ihvps[layer] = ihvp[layer].view(-1, 1) #Dictionary of matrices for each layer (n_queries x (m *n))
                 else:
 
-                    if do_svd:
-                        ihvps[layer]['comp_one'].append(ihvp[layer]['comp_one'].detach().to("cpu"))
-                        ihvps[layer]['comp_two'].append(ihvp[layer]['comp_two'].detach().to("cpu"))
-                        ihvps[layer]['comp_three'].append(ihvp[layer]['comp_three'].detach().to("cpu"))
+                    if svd:
+                        ihvps[layer]['comp_one'].append(ihvp[layer]['comp_one'])
+                        ihvps[layer]['comp_two'].append(ihvp[layer]['comp_two'])
+                        ihvps[layer]['comp_three'].append(ihvp[layer]['comp_three'])
                     else:
 
-                        ihvps[layer] = torch.cat([ihvps[layer], ihvp[layer].view(-1, 1).detach().to("cpu")], dim=1) #Dictionary of matrices for each layer (n_queries x (m *n))
+                        ihvps[layer] = torch.cat([ihvps[layer], ihvp[layer].view(-1, 1)], dim=1) #Dictionary of matrices for each layer (n_queries x (m *n))
 
         ### now create tensor out of the list of ihvps we have (it is a list of len 6, each is of dim m*32, we want m*32*6)
-        if do_svd:
+        if svd:
             for each_layer in ihvps:
-                ihvps[each_layer] = {'comp_one' : torch.stack(ihvps[each_layer]['comp_one'], dim = -1),
-                                        'comp_two': torch.stack(ihvps[each_layer]['comp_two'], dim = -1),
-                                        'comp_three':torch.stack(ihvps[each_layer]['comp_three'], dim = -1)
-                                    }
-
+                ihvps[each_layer] = { 
+                    'comp_one' : torch.stack(ihvps[each_layer]['comp_one'], dim = -1), 
+                    'comp_two': torch.stack(ihvps[each_layer]['comp_two'], dim = -1), 
+                    'comp_three':torch.stack(ihvps[each_layer]['comp_three'], dim = -1)
+                    }
         return ihvps
 
     def _layer_hooks(self):
