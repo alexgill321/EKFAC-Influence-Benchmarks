@@ -2,11 +2,10 @@ import logging
 from typing import List, Union
 
 import numpy as np
-from influence.base import BaseKFACInfluenceModule, BaseLayerInfluenceModule, BaseInfluenceObjective, get_memory_usage, print_memory_usage
+from influence import BaseKFACInfluenceModule, BaseLayerInfluenceModule, BaseInfluenceObjective, get_memory_usage
 import torch
 from tqdm import tqdm
 import torch.nn as nn
-import torch.nn.functional as F
 
 from torch.utils import data
 

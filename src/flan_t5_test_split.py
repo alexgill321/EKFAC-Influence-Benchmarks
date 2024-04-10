@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader, Dataset, Subset
 import sys
 import argparse
 import json
+import pandas as pd
 import torch
 
 parser = argparse.ArgumentParser()
@@ -26,6 +27,29 @@ print("num devices: ", torch.cuda.device_count())
 model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
 model.to(DEVICE)
 
+class CustomMNLITruncDataset(Dataset):
+    def __init__(self, file_path, tokenizer):
+        self.tokenizer = tokenizer
+        df = pd.read_csv(file_path)
+        # We create two separate records for each row: one for left and one for right truncates, both sharing the same label
+        left_truncates = df[['input_left_truncate', 'true_label']].rename(columns={'input_left_truncate': 'input'})
+        right_truncates = df[['input_right_truncate', 'true_label']].rename(columns={'input_right_truncate': 'input'})
+        # Combine these records into a single dataframe
+        self.data_frame = pd.concat([left_truncates, right_truncates], ignore_index=True)
+
+    def __len__(self):
+        return len(self.data_frame)
+
+    def __getitem__(self, idx):
+        sample = self.data_frame.iloc[idx]
+        input_data = sample['input']
+        input_data = self.tokenizer.encode(input_data, return_tensors='pt', truncation= True)
+        input_data = input_data.squeeze(0).to(DEVICE)
+        label = sample['true_label']
+        label = self.tokenizer.encode(label, return_tensors='pt')
+        label = label[:, 0].to(DEVICE)
+        return input_data, label
+    
 class CustomMNLIDataset(Dataset):
     def __init__(self, file_path, tokenizer):
         self.tokenizer = tokenizer
@@ -44,8 +68,8 @@ class CustomMNLIDataset(Dataset):
         label = label[:, 0].to(DEVICE)
         return input_data, label
     
-def get_model_and_dataloader(data_path = args.data_dir+'/contract-nli/'):
-    tokenizer = AutoTokenizer.from_pretrained(args.model_dir, truncation_side="right",  model_max_length=args.model_max_len)
+def get_dataloaders(data_path = args.data_dir+'/contract-nli/'):
+    tokenizer = AutoTokenizer.from_pretrained(args.model_dir,truncation_side="right",  model_max_length=args.model_max_len)
 
     dataset_train = CustomMNLIDataset(file_path=data_path+'T5_ready_train.json', tokenizer=tokenizer)
     train_dataloader = DataLoader(dataset_train, batch_size=1)
@@ -53,18 +77,20 @@ def get_model_and_dataloader(data_path = args.data_dir+'/contract-nli/'):
     dataset_dev = CustomMNLIDataset(file_path=data_path + 'T5_ready_dev.json', tokenizer=tokenizer)
     dev_dataloader = DataLoader(dataset_dev, batch_size=1)
 
-    dataset_test = CustomMNLIDataset(file_path=data_path + 'T5_ready_test.json', tokenizer=tokenizer)
+    dataset_test = CustomMNLITruncDataset(file_path=data_path + 'Influential_split_full.csv', tokenizer=tokenizer)
     test_dataloader = DataLoader(dataset_test, batch_size=1)
 
     if args.cov_batch_num is not None:
         cov_dataset = Subset(dataset_train, range(args.cov_batch_num))
         cov_dataloader = DataLoader(cov_dataset, batch_size=1)
     else:
-        cov_dataloader = train_dataloader    
+        cov_dataloader = train_dataloader
 
     return train_dataloader, dev_dataloader, test_dataloader, cov_dataloader
 
-train_loader, dev_dataloader, test_dataloader, cov_dataloader = get_model_and_dataloader()
+train_loader, dev_dataloader, test_dataloader, cov_dataloader = get_dataloaders()
+
+print(len(test_dataloader))
 
 class TransformerClassificationObjective(KFACBaseInfluenceObjective):
     def test_loss(self, model, batch):
@@ -123,6 +149,8 @@ train_idxs = range(len(train_loader))
 
 if args.test_size is None:
     args.test_size = len(test_dataloader)
+    num_full_batches = 1
+    remainder = 0
 else:
     args.test_size = min(args.test_size, len(test_dataloader))  
     num_full_batches = len(test_dataloader) // args.test_size
@@ -136,7 +164,7 @@ for batch_idx in range(num_full_batches):
     influences = module.influences(train_idxs, test_idxs, args.svd)
 
     for layer in influences:
-        output_file_path = f"{args.output_dir}/ekfac_influences_{layer}_{start_idx}-{end_idx}.txt"
+        output_file_path = f"{args.output_dir}/ekfac_influences_{layer}_full-split.txt"
         with open(output_file_path, 'w') as f:
             for idx, influence in enumerate(influences[layer]):
                 f.write(f'{idx}: {influence.tolist()}\n')
@@ -149,7 +177,7 @@ if remainder > 0:
     influences = module.influences(train_idxs, test_idxs, args.svd)
 
     for layer in influences:
-        output_file_path = f"{args.output_dir}/ekfac_influences_{layer}_{start_idx}-{end_idx}.txt"
+        output_file_path = f"{args.output_dir}/ekfac_influences_{layer}_full-split.txt"
         with open(output_file_path, 'w') as f:
             for idx, influence in enumerate(influences[layer]):
                 f.write(f'{idx}: {influence.tolist()}\n')
