@@ -57,7 +57,7 @@ def main():
 
     train_dataset, test_dataset = get_dataloaders()
     mean_influence = None
-    n_layers = 24
+    n_layers = 2
     for i in tqdm.tqdm(range(n_layers)):
         for block_type in ['encoder', 'decoder']:
             if block_type == 'encoder':
@@ -87,7 +87,8 @@ def main():
     for i, row in enumerate(top_indices):
         row = row.tolist()
         query, label = test_dataset[i]
-        df = df.append({"input": query, "label": label, "top1": train_dataset[row[0]][0], "top2": train_dataset[row[1]][0], "top3": train_dataset[row[2]][0]}, ignore_index=True)
+        new_row = [query, label, train_dataset[row[0]][0], train_dataset[row[1]][0], train_dataset[row[2]][0]]
+        df.loc[len(df.index)] = new_row
 
     df.to_csv(args.output_dir + '/k_top_scores.csv', index=False)
         
