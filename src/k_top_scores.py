@@ -87,7 +87,7 @@ def main():
     for i, row in enumerate(top_indices):
         row = row.tolist()
         query, label = test_dataset[i]
-        new_row = [query, label, train_dataset[row[0]][0], train_dataset[row[1]][0], train_dataset[row[2]][0]]
+        new_row = [query, label, row[0], row[1], row[2]]
         df.loc[len(df.index)] = new_row
 
     df.to_csv(args.output_dir + '/k_top_scores.csv', index=False)
