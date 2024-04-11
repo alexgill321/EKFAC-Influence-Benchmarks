@@ -7,7 +7,7 @@ from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Subset
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 def parse_args():
@@ -91,9 +91,9 @@ class FlanT5Task(Task):
     def tracked_modules(self):
         total_modules = []
         
-        for i in range(24):
-            total_modules.append(f'ekfac_influences_decoder.block.{i}.layer.2.DenseReluDense.wo')
-            total_modules.append(f'ekfac_influences_encoder.block.{i}.layer.1.DenseReluDense.wo')
+        for i in range(8):
+            total_modules.append(f'decoder.block.{i}.layer.2.DenseReluDense.wo')
+            total_modules.append(f'encoder.block.{i}.layer.1.DenseReluDense.wo')
 
         return total_modules
     
@@ -109,7 +109,7 @@ class CustomMNLIDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.data[idx]
         input_data = sample['input']
-        input_data = self.tokenizer.encode(input_data, return_tensors='pt')
+        input_data = self.tokenizer.encode(input_data, return_tensors='pt', truncation= True)
         input_data = input_data.squeeze(0)
         label = self.tokenizer.encode(sample['choice'], return_tensors='pt')
         label = label[:, 0]
@@ -131,7 +131,7 @@ class CustomMNLITruncDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.data_frame.iloc[idx]
         input_data = sample['input']
-        input_data = self.tokenizer.encode(input_data, return_tensors='pt')
+        input_data = self.tokenizer.encode(input_data, return_tensors='pt', truncation= True)
         input_data = input_data.squeeze(0)
         label = sample['true_label']
         label = self.tokenizer.encode(label, return_tensors='pt')
@@ -151,8 +151,7 @@ def main():
 
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
 
-    for module in model.modules():
-        print(module)
+    print(model)
 
     task = FlanT5Task()
     model = prepare_model(model, task)
@@ -174,11 +173,10 @@ def main():
 
     analyzer.fit_all_factors(
         factors_name=factors_name,
-        dataset=train_dataset,
-        per_device_batch_size=None,
+        dataset=Subset(train_dataset, list(range(300))),
+        per_device_batch_size=1,
         factor_args=factor_args,
-        overwrite_output_dir=False,
-        initial_per_device_batch_size_attempt=128,
+        overwrite_output_dir=True,
     )
 
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
