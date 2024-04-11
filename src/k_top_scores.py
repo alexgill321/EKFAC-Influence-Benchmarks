@@ -90,7 +90,7 @@ def main():
         new_row = [query, label, row[0], row[1], row[2]]
         df.loc[len(df.index)] = new_row
 
-    df.to_csv(args.output_dir + '/k_top_scores.csv', index=False)
+    df.to_csv(args.output_dir + '/k_top_scores_indices.csv', index=False)
         
 
         
