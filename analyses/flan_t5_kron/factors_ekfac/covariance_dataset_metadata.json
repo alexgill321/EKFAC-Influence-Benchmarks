@@ -1,5 +1,5 @@
 {
     "type": "Subset",
-    "dataset_size": 300,
+    "dataset_size": 10,
     "indices": null
 }

@@ -49,7 +49,7 @@ def parse_args():
     parser.add_argument(
         "--query_batch_size",
         type=int,
-        default=1,
+        default=10,
         help="Batch size for computing query gradients.",
     )
 
@@ -73,17 +73,15 @@ def parse_args():
 class FlanT5Task(Task):
     def compute_train_loss(self, batch, model, sample = False):
         outputs = model(input_ids = batch[0], labels = batch[1])
-
         if not sample:
             return outputs.loss
         else:
-            with torch.no_grad():
+            with torch.no_grad():  
                 probs = torch.softmax(outputs.logits[:, -1, :], dim=-1)
                 sample = torch.multinomial(probs.view(-1, probs.size(-1)), num_samples=1)
                 sampled_labels = sample.view(outputs.logits.size(0), 1)
             
-            with torch.enable_grad():
-                return model(input_ids = batch[0], labels = sampled_labels).loss
+            return torch.nn.functional.cross_entropy(outputs.logits[:, -1, :], sampled_labels.squeeze(1))
             
     def compute_measurement(self, batch, model):
         return self.compute_train_loss(batch, model)
@@ -92,8 +90,10 @@ class FlanT5Task(Task):
         total_modules = []
         
         for i in range(8):
-            total_modules.append(f'decoder.block.{i}.layer.2.DenseReluDense.wo')
-            total_modules.append(f'encoder.block.{i}.layer.1.DenseReluDense.wo')
+            total_modules.append(f'decoder.block.{i}.layer.2.DenseReluDense.wi_0')
+            total_modules.append(f'decoder.block.{i}.layer.2.DenseReluDense.wi_1')
+            total_modules.append(f'encoder.block.{i}.layer.1.DenseReluDense.wi_0')
+            total_modules.append(f'encoder.block.{i}.layer.1.DenseReluDense.wi_1')
 
         return total_modules
     
@@ -109,7 +109,7 @@ class CustomMNLIDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.data[idx]
         input_data = sample['input']
-        input_data = self.tokenizer.encode(input_data, return_tensors='pt', truncation= True)
+        input_data = self.tokenizer.encode(input_data, return_tensors='pt', padding='max_length', truncation= True)
         input_data = input_data.squeeze(0)
         label = self.tokenizer.encode(sample['choice'], return_tensors='pt')
         label = label[:, 0]
@@ -131,7 +131,7 @@ class CustomMNLITruncDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.data_frame.iloc[idx]
         input_data = sample['input']
-        input_data = self.tokenizer.encode(input_data, return_tensors='pt', truncation= True)
+        input_data = self.tokenizer.encode(input_data, return_tensors='pt',padding='max_length', truncation= True)
         input_data = input_data.squeeze(0)
         label = sample['true_label']
         label = self.tokenizer.encode(label, return_tensors='pt')
@@ -143,7 +143,7 @@ def main():
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
 
-    tokenizer=AutoTokenizer.from_pretrained(args.model_dir, truncation_side="right",  model_max_length=args.model_max_len)
+    tokenizer=AutoTokenizer.from_pretrained(args.model_dir, truncation_side="right", model_max_length=args.model_max_len)
 
     train_dataset = CustomMNLIDataset(file_path=args.data_dir+'/contract-nli/T5_ready_train.json', tokenizer=tokenizer)
 
@@ -173,7 +173,7 @@ def main():
 
     analyzer.fit_all_factors(
         factors_name=factors_name,
-        dataset=Subset(train_dataset, list(range(300))),
+        dataset=Subset(train_dataset, list(range(10))),
         per_device_batch_size=1,
         factor_args=factor_args,
         overwrite_output_dir=True,
@@ -197,9 +197,10 @@ def main():
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         score_args=score_args,
-        factors_name=args.factor_strategy,
+        factors_name=factors_name,
         query_dataset=eval_dataset,
         query_indices=list(range(len(eval_dataset))),
+        train_indices=list(range(5)),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,
