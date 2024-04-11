@@ -57,7 +57,7 @@ def main():
 
     train_dataset, test_dataset = get_dataloaders()
     mean_influence = None
-    n_layers = 2
+    n_layers = 24
     for i in tqdm.tqdm(range(n_layers)):
         for block_type in ['encoder', 'decoder']:
             if block_type == 'encoder':
@@ -80,7 +80,11 @@ def main():
             else:
                 mean_influence.add_(influences)
 
-    influence_scores = torch.div(mean_influence, n_layers*2)
+    mean_influence_left = mean_influence[:len(mean_influence)//2]
+    mean_influence_right = mean_influence[len(mean_influence)//2:]
+    mean_influence_left.add_(mean_influence_right)
+
+    influence_scores = torch.div(mean_influence_left, n_layers*4)
     top_scores, top_indices = torch.topk(influence_scores, 3, dim=1)
 
     df = pd.DataFrame(columns=["input", "label", "top1", "top2", "top3"])
