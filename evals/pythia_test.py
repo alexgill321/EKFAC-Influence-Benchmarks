@@ -2,10 +2,18 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from torch.utils.data import DataLoader, Dataset, Subset
 import sys
 import argparse
+import numpy as np
+import torch
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--pile_dir", type=str, default="C:/Users/alexg/Documents/GitHub/pythia/data/")
-parser.add_argument("--ekfac_dir", type=str, default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks")
+parser.add_argument("--pile_dir",
+                    type=str, 
+                    default="C:/Users/alexg/Documents/GitHub/pythia/data/"
+                    )
+parser.add_argument("--ekfac_dir", 
+                    type=str, 
+                    default="C:/Users/alexg/Documents/GitHub/EKFAC-Influence-Benchmarks"
+                    )
 parser.add_argument("--cov_batch_num", 
                     type=int, 
                     default=100,
@@ -24,7 +32,7 @@ parser.add_argument("--model_id",
 parser.add_argument("--layers", 
                     nargs='+', 
                     type=str, 
-                    default=['gpt_neox.layers.1.mlp.dense_4h_to_h'], 
+                    default='all', 
                     help="List of Layers to compute influence on"
                     )
 args = parser.parse_args()
@@ -32,8 +40,6 @@ sys.path.append(args.ekfac_dir)
 
 from influence.base import KFACBaseInfluenceObjective, print_memory_usage
 from influence.modules import EKFACInfluenceModule
-import numpy as np
-import torch
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -42,6 +48,7 @@ if args.layers:
 else:
     print("No layers selected.")
 
+print("Using device:", DEVICE)
 print("Using model id:", args.model_id)
 print("Covariance dataset size:", args.cov_batch_num)
 
@@ -71,12 +78,8 @@ tokenizer = AutoTokenizer.from_pretrained(args.model_id)
 #         print(tokenizer.decode(i))
 #     break
 
-model = AutoModelForCausalLM.from_pretrained(args.model_id, device_map="auto")
-print("Model loaded.")
-print_memory_usage(DEVICE)
+model = AutoModelForCausalLM.from_pretrained(args.model_id)
 model.to(DEVICE)
-print("Model moved to device.")
-print_memory_usage(DEVICE)
 
 class PileObjective(KFACBaseInfluenceObjective):
     def test_loss(self, model, batch):
@@ -160,6 +163,15 @@ prompt_dataloader = DataLoader(prompt_dataset, batch_size=1)
 #         prob.add_(completion_probs[0, i, batch[1][0, i]])
 #     break
 
+if args.layers == 'all':
+    layers = []
+    for name, layer in model.named_modules():
+        if isinstance(layer, torch.nn.Linear) and (name.endswith('.dense_h_to_4h') or name.endswith('.dense_4h_to_h')):
+            layers.append(name)
+else:
+    layers = args.layers
+
+print(f"Selected layers: {layers}")
 
 module = EKFACInfluenceModule(
     model=model,
@@ -168,7 +180,7 @@ module = EKFACInfluenceModule(
     test_loader=prompt_dataloader,
     cov_loader=cov_dataloader,
     device=DEVICE,
-    layers=args.layers,
+    layers=layers,
     n_samples=1
 )
 

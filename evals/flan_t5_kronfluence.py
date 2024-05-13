@@ -57,7 +57,7 @@ def parse_args():
         "--train_batch_size",
         type=int,
         default=1,
-        help="Batch size for computing query gradients.",
+        help="Batch size for computing training gradients.",
     )
     parser.add_argument(
         "--factor_strategy",
