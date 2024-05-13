@@ -129,7 +129,8 @@ def main():
                 with torch.no_grad():  
                     output_probs = torch.softmax(outputs.logits, dim=-1)
                     samples = torch.multinomial(output_probs.view(-1, output_probs.size(-1)), num_samples=1, replacement=True)
-                    sampled_labels = samples.view(outputs.logits.size(0), outputs.logits.size(1), 1)
+                    sampled_labels = samples.view(outputs.logits.size(0), outputs.logits.size(1))
+                    sampled_labels = sampled_labels[:, 1:]
                 return loss_fn(outputs.logits.swapaxes(1, 2)[:, :, :-1], sampled_labels)
                 
         def compute_measurement(self, batch, model):
