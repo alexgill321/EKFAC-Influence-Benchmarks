@@ -17,4 +17,4 @@ mkdir -p $OUTDIR
 
 nohup watch -n 10 "nvidia-smi >> $NVIDIA_SMI_LOG" &
 source $WORKDIR/ekfac/bin/activate
-python $WORKDIR/evals/pythia_kronfluence.py --data_dir $WORKDIR --ekfac_dir $WORKDIR --cov_batch_num 200 --output_dir $OUTDIR --model_id "EleutherAI/pythia-70m" --query_batch_size 32 --train_batch_size 32
+python $WORKDIR/evals/pythia_kronfluence.py --data_dir $WORKDIR --cov_batch_num 200 --output_dir $OUTDIR --model_id "EleutherAI/pythia-70m" --query_batch_size 32 --train_batch_size 32
