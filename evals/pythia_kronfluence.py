@@ -53,7 +53,7 @@ def parse_args():
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=16,
+        default=32,
         help="Batch size for computing training gradients.",
     )
 
@@ -138,12 +138,11 @@ def main():
             model_outputs = model(inputs)
             output_probs = torch.log_softmax(model_outputs.logits, dim=-1)
             completion_probs = output_probs[:, batch[0].size(1)-1:-1]
-            prob = None
-            for i in range(completion_probs.size(1)):
-                if prob is None:
-                    prob = completion_probs[0, i, batch[1][0, i]]
-                else:
-                    prob.add_(completion_probs[0, i, batch[1][0, i]])
+            indices = batch[1][0].unsqueeze(0).unsqueeze(-1)
+            gathered_probs = torch.gather(completion_probs, dim=-1, index=indices).squeeze(-1)
+            
+            # Sum the gathered probabilities
+            prob = gathered_probs.sum()
             return prob
 
         def tracked_modules(self):
