@@ -16,7 +16,7 @@ parser.add_argument("--ekfac_dir",
                     )
 parser.add_argument("--cov_batch_num", 
                     type=int, 
-                    default=100,
+                    default=200,
                     help="Number of batches to compute activations for"
                     )
 parser.add_argument("--output_dir", 
@@ -35,7 +35,15 @@ parser.add_argument("--layers",
                     default='all', 
                     help="List of Layers to compute influence on"
                     )
-parser.add_argument("--svd", type=bool, default=True)
+parser.add_argument("--train_batch_size",
+                    type=int,
+                    default=1,
+                    help="Batch size for computing training gradients."
+                    )
+parser.add_argument("--svd", 
+                    type=bool, 
+                    default=True
+                    )
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
 
@@ -66,7 +74,7 @@ pile_dataset = PileDataset(data)
 
 print("Dataset length:", len(pile_dataset))
 
-pile_dataloader = DataLoader(pile_dataset, batch_size=1)
+pile_dataloader = DataLoader(pile_dataset, batch_size=args.train_batch_size)
 tokenizer = AutoTokenizer.from_pretrained(args.model_id)
 
 # for batch in pile_dataloader:
@@ -140,8 +148,8 @@ class PromptDataset(Dataset):
         return self.dataset[idx]
 
 prompt_dataset = PromptDataset(tokenized_prompts)
-prompt_subset = Subset(pile_dataset, indices=range(args.cov_batch_num))
-cov_dataloader = DataLoader(prompt_subset, batch_size=1)
+prompt_subset = Subset(pile_dataset, indices=range(args.cov_batch_num * args.train_batch_size))
+cov_dataloader = DataLoader(prompt_subset, batch_size=args.train_batch_size)
 prompt_dataloader = DataLoader(prompt_dataset, batch_size=1)
 
 # for batch in pile_dataloader:
@@ -180,10 +188,9 @@ module = EKFACInfluenceModule(
     n_samples=1
 )
 
-
 train_idxs = range(0, len(pile_dataset))
 test_idxs = [0, 1, 2, 3]
-influences = module.influences(train_idxs=train_idxs, test_idxs=test_idxs)
+influences = module.influences(train_idxs=train_idxs, test_idxs=test_idxs, svd=args.svd)
 
 for layer in influences:
     with open(args.output_dir +  f'/ekfac_influences_{layer}.txt', 'w') as f:
