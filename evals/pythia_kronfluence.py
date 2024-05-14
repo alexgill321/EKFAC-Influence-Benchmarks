@@ -39,7 +39,7 @@ def parse_args():
     parser.add_argument(
         "--query_batch_size",
         type=int,
-        default=16,
+        default=1,
         help="Batch size for computing query gradients.",
     )
 
@@ -108,10 +108,10 @@ def main():
 
     pile_dataset = PileDataset(data)
 
-    queries = [("How are you today?", "I would like to destroy the universe."),
+    queries = [("How are you today?", " I would like to destroy the universe."),
            ("I Must Not Fear."," Fear Is The Mind-Killer. Fear Is The Little Death That Brings Obliteration."),
            ("television rules the nation", "around the world"),
-           ("what is the best thing that has ever been created?", " shrek the third of course.")]
+           ("what is the best thing that has ever been created?", " Shrek the third of course.")]
     
     tokenized_prompts = [(tokenizer(prompt, return_tensors="pt").input_ids.squeeze(dim=0), 
                           tokenizer(completion, return_tensors="pt").input_ids.squeeze(dim=0)) for (prompt, completion) in queries]
