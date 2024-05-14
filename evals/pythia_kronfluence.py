@@ -134,7 +134,17 @@ def main():
                 return loss_fn(outputs.logits.swapaxes(1, 2)[:, :, :-1], sampled_labels)
                 
         def compute_measurement(self, batch, model):
-            return self.compute_train_loss(batch, model)
+            inputs = torch.concat([batch[0], batch[1]], dim=1)
+            model_outputs = model(inputs)
+            output_probs = torch.log_softmax(model_outputs.logits, dim=-1)
+            completion_probs = output_probs[:, batch[0].size(1)-1:-1]
+            prob = None
+            for i in range(completion_probs.size(1)):
+                if prob is None:
+                    prob = completion_probs[0, i, batch[1][0, i]]
+                else:
+                    prob.add_(completion_probs[0, i, batch[1][0, i]])
+            return prob
 
         def tracked_modules(self):
             total_modules = []

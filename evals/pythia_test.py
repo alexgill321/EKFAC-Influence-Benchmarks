@@ -35,6 +35,7 @@ parser.add_argument("--layers",
                     default='all', 
                     help="List of Layers to compute influence on"
                     )
+parser.add_argument("--svd", type=bool, default=True)
 args = parser.parse_args()
 sys.path.append(args.ekfac_dir)
 
@@ -42,11 +43,6 @@ from influence.base import KFACBaseInfluenceObjective, print_memory_usage
 from influence.modules import EKFACInfluenceModule
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-if args.layers:
-    print("Selected layers:", args.layers)
-else:
-    print("No layers selected.")
 
 print("Using device:", DEVICE)
 print("Using model id:", args.model_id)
