@@ -53,7 +53,7 @@ def parse_args():
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=32,
+        default=2,
         help="Batch size for computing training gradients.",
     )
 
@@ -67,7 +67,7 @@ def parse_args():
     parser.add_argument(
         "--cov_batch_num",
         type=int,
-        default=100,
+        default=10,
         help="Number of batches to compute activations for"
     )
 
@@ -134,15 +134,14 @@ def main():
                 return loss_fn(outputs.logits.swapaxes(1, 2)[:, :, :-1], sampled_labels)
                 
         def compute_measurement(self, batch, model):
+            device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
             inputs = torch.concat([batch[0], batch[1]], dim=1)
             model_outputs = model(inputs)
             output_probs = torch.log_softmax(model_outputs.logits, dim=-1)
             completion_probs = output_probs[:, batch[0].size(1)-1:-1]
-            indices = batch[1][0].unsqueeze(0).unsqueeze(-1)
-            gathered_probs = torch.gather(completion_probs, dim=-1, index=indices).squeeze(-1)
-            
-            # Sum the gathered probabilities
-            prob = gathered_probs.sum()
+            prob = torch.tensor(0.0, device=device)
+            for i in range(completion_probs.size(1)):
+                prob.add_(completion_probs[0, i, batch[1][0, i]])
             return prob
 
         def tracked_modules(self):
